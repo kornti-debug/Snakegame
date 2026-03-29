@@ -16,7 +16,12 @@ export interface ClientToServerEvents {
   'input:turn': (playerIndex: number, direction: -1 | 0 | 1) => void;
   'input:boost': (playerIndex: number, active: boolean) => void;
   'player:join': (payload: { name: string; playerIndex: number }) => void;
-  'player:ready': () => void;
+  'player:leave': (playerIndex: number) => void;
+  'player:ready': (playerIndex: number) => void;
+  'player:set-color': (playerIndex: number, color: string) => void;
+  'player:set-name': (playerIndex: number, name: string) => void;
+  'lobby:start-game': () => void;
+  'lobby:return': () => void;
 }
 
 export interface InterServerEvents {}

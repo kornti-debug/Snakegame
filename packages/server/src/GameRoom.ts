@@ -1,4 +1,4 @@
-import type { GameSnapshot } from '@snakegame/shared';
+import type { GameSnapshot, GamePhase, LobbyPlayer } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS } from '@snakegame/shared';
 import { Snake } from './entities/Snake.js';
 import { Obstacle } from './entities/Obstacle.js';
@@ -9,6 +9,12 @@ import { PowerUpSystem } from './systems/PowerUpSystem.js';
 import { RoundManager } from './RoundManager.js';
 
 export class GameRoom {
+  gamePhase: GamePhase = 'lobby';
+
+  // Lobby state
+  private lobbyPlayers = new Map<string, LobbyPlayer>(); // key: "socketId:playerIndex"
+
+  // In-game state
   private players = new Map<string, Map<number, Snake>>();
   private tick = 0;
   private movementSystem = new MovementSystem();
@@ -18,23 +24,96 @@ export class GameRoom {
   readonly roundManager = new RoundManager();
   obstacles: Obstacle[] = [];
   private respawnTimers = new Map<string, number>();
-  private colorCounter = 0;
 
-  // Events emitted during update (consumed by SocketManager)
   pendingEvents: GameEvent[] = [];
 
-  addPlayer(socketId: string, playerIndex: number, name: string): Snake {
-    const color = PLAYER_COLORS[this.colorCounter % PLAYER_COLORS.length];
-    this.colorCounter++;
-    const { pos, angle } = this.getSpawnPoint();
-    const snake = new Snake(name, color, pos, angle);
+  // --- Lobby ---
 
-    if (!this.players.has(socketId)) {
-      this.players.set(socketId, new Map());
-    }
-    this.players.get(socketId)!.set(playerIndex, snake);
-    return snake;
+  lobbyJoin(socketId: string, playerIndex: number, name: string): void {
+    const key = `${socketId}:${playerIndex}`;
+    const colorIdx = this.lobbyPlayers.size % PLAYER_COLORS.length;
+    this.lobbyPlayers.set(key, {
+      index: playerIndex,
+      name,
+      color: PLAYER_COLORS[colorIdx],
+      ready: false,
+    });
   }
+
+  lobbyLeave(socketId: string, playerIndex: number): void {
+    this.lobbyPlayers.delete(`${socketId}:${playerIndex}`);
+  }
+
+  lobbyLeaveAll(socketId: string): void {
+    for (const key of [...this.lobbyPlayers.keys()]) {
+      if (key.startsWith(`${socketId}:`)) {
+        this.lobbyPlayers.delete(key);
+      }
+    }
+  }
+
+  lobbySetReady(socketId: string, playerIndex: number): void {
+    const p = this.lobbyPlayers.get(`${socketId}:${playerIndex}`);
+    if (p) p.ready = !p.ready;
+  }
+
+  lobbySetColor(socketId: string, playerIndex: number, color: string): void {
+    const p = this.lobbyPlayers.get(`${socketId}:${playerIndex}`);
+    if (p) p.color = color;
+  }
+
+  lobbySetName(socketId: string, playerIndex: number, name: string): void {
+    const p = this.lobbyPlayers.get(`${socketId}:${playerIndex}`);
+    if (p) p.name = name;
+  }
+
+  getLobbyPlayers(): LobbyPlayer[] {
+    return [...this.lobbyPlayers.values()];
+  }
+
+  startGame(): void {
+    if (this.lobbyPlayers.size === 0) return;
+
+    this.gamePhase = 'ingame';
+    this.players.clear();
+    this.tick = 0;
+
+    // Create snakes from lobby players
+    for (const [key, lobbyPlayer] of this.lobbyPlayers) {
+      const socketId = key.split(':')[0];
+      const { pos, angle } = this.getSpawnPoint();
+      const snake = new Snake(lobbyPlayer.name, lobbyPlayer.color, pos, angle);
+
+      if (!this.players.has(socketId)) {
+        this.players.set(socketId, new Map());
+      }
+      this.players.get(socketId)!.set(lobbyPlayer.index, snake);
+    }
+
+    // Reset round manager to start fresh
+    this.roundManager.phase = 'waiting';
+    this.roundManager.roundNumber = 0;
+    this.roundManager.timeRemainingMs = 3000; // shorter first wait
+    this.revealSystem.reset();
+    this.powerUpSystem.reset();
+    this.obstacles = [];
+    this.respawnTimers.clear();
+  }
+
+  returnToLobby(): void {
+    this.gamePhase = 'lobby';
+    this.players.clear();
+    this.respawnTimers.clear();
+    this.revealSystem.reset();
+    this.powerUpSystem.reset();
+    this.obstacles = [];
+    // Keep lobby players as-is
+    for (const p of this.lobbyPlayers.values()) {
+      p.ready = false;
+    }
+  }
+
+  // --- In-game ---
 
   getSnake(socketId: string, playerIndex: number): Snake | undefined {
     return this.players.get(socketId)?.get(playerIndex);
@@ -48,6 +127,7 @@ export class GameRoom {
       }
     }
     this.players.delete(socketId);
+    this.lobbyLeaveAll(socketId);
   }
 
   getAllSnakes(): Snake[] {
@@ -63,13 +143,15 @@ export class GameRoom {
   update(dt: number): void {
     this.tick++;
     this.pendingEvents = [];
+
+    if (this.gamePhase !== 'ingame') return;
+
     const snakes = this.getAllSnakes();
 
     // Round state machine
     const phaseChange = this.roundManager.update(dt);
 
     if (phaseChange === 'playing') {
-      // New round started — reset everything
       this.resetForNewRound(snakes);
       this.pendingEvents.push({
         type: 'round-start',
@@ -78,7 +160,6 @@ export class GameRoom {
     }
 
     if (phaseChange === 'ended') {
-      // Round just ended — determine winner
       const revealScores = this.revealSystem.getRevealScores();
       let winner: { id: string; name: string; score: number } | null = null;
       let maxScore = 0;
@@ -97,9 +178,7 @@ export class GameRoom {
       });
     }
 
-    // Only run gameplay during playing phase
     if (this.roundManager.phase === 'playing') {
-      // Respawn timers
       for (const [snakeId, timer] of this.respawnTimers) {
         const remaining = timer - dt;
         if (remaining <= 0) {
@@ -119,14 +198,12 @@ export class GameRoom {
       this.revealSystem.update(snakes);
       this.powerUpSystem.update(snakes, dt);
 
-      // Update obstacles
       const dtMs = dt * 1000;
       for (const obstacle of this.obstacles) {
         obstacle.update(dtMs);
       }
       this.obstacles = this.obstacles.filter(o => !o.isExpired());
 
-      // Queue respawn for dead snakes
       for (const snake of snakes) {
         if (!snake.alive && !this.respawnTimers.has(snake.id)) {
           this.respawnTimers.set(snake.id, 2);
@@ -156,12 +233,14 @@ export class GameRoom {
     return {
       tick: this.tick,
       timestamp: Date.now(),
+      gamePhase: this.gamePhase,
       snakes: snakes.map(s => s.toState()),
       arena: { width: ARENA_WIDTH, height: ARENA_HEIGHT },
       revealPercentage: this.revealSystem.getRevealPercentage(),
       round: this.roundManager.getRoundState(revealScores),
       powerUps: this.powerUpSystem.getFieldPowerUps().map(p => p.toState()),
       obstacles: this.obstacles.map(o => o.toState()),
+      lobbyPlayers: this.getLobbyPlayers(),
     };
   }
 

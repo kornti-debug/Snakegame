@@ -23,6 +23,7 @@ export interface RevealDelta {
   blocks: number[];
 }
 
+export type GamePhase = 'lobby' | 'ingame';
 export type RoundPhase = 'waiting' | 'playing' | 'ended';
 
 export interface RoundState {
@@ -46,15 +47,24 @@ export interface ObstacleState {
   height: number;
 }
 
+export interface LobbyPlayer {
+  index: number;
+  name: string;
+  color: string;
+  ready: boolean;
+}
+
 export interface GameSnapshot {
   tick: number;
   timestamp: number;
+  gamePhase: GamePhase;
   snakes: SnakeState[];
   arena: ArenaConfig;
   revealPercentage: number;
   round: RoundState;
   powerUps: PowerUpState[];
   obstacles: ObstacleState[];
+  lobbyPlayers: LobbyPlayer[];
 }
 
 export interface ArenaConfig {

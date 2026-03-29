@@ -14,17 +14,8 @@ export class Renderer {
   private gameLayer: GameLayer;
   private uiLayer: UILayer;
 
-  constructor(container: HTMLElement) {
-    // Main visible canvas (composites all layers)
-    this.canvas = document.createElement('canvas');
-    this.canvas.width = ARENA_WIDTH;
-    this.canvas.height = ARENA_HEIGHT;
-    this.canvas.style.width = '100%';
-    this.canvas.style.height = '100%';
-    this.canvas.style.objectFit = 'contain';
-    this.canvas.style.background = '#000';
-    container.appendChild(this.canvas);
-
+  constructor(container: HTMLElement, canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
     this.ctx = this.canvas.getContext('2d')!;
 
     // Create offscreen layers

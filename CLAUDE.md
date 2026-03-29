@@ -33,20 +33,26 @@ npm run dev:client
 - Input providers implement `InputProvider` interface (poll-based, not event-based).
 - Power-ups use plugin registry pattern (`PowerUpRegistry.register()`).
 - External services (Touch Designer, Twitch) connect via REST API + WebSocket namespace — the game does NOT handle Twitch directly.
+- Scoring is based on **area revealed** (blocks), not kills. Kills are tactical (dead = not revealing).
 
-## What's Implemented (Phase 1-2)
+## What's Implemented
 - Snake movement with continuous smooth curves (angle + turn rate)
-- Collision system (snake-vs-snake, snake-vs-wall, self-collision)
+- Collision system (snake-vs-snake, snake-vs-wall, self-collision, snake-vs-obstacle)
+- Ghost mode (pass through snakes, semi-transparent rendering)
 - Auto-respawn after 2 seconds
 - Keyboard input (WASD + Arrows for 2 players)
 - Gamepad input provider (ready, not actively used yet)
 - Canvas rendering with bezier curve snakes + eyes
-- HUD with player names and scores
+- 4-canvas layer stack (background image, reveal mask, game objects, UI)
+- Image reveal mechanic (bitmask grid, destination-out compositing)
+- Per-snake reveal tracking and scoring
+- Round management (waiting → playing → ended → repeat, 90s rounds)
+- Power-up system: SpeedBoost, WideTrail, Ghost (plugin registry pattern)
+- HUD with round timer, reveal scores, winner overlay
 - State interpolation (30Hz server → 60fps client)
 - Graceful server shutdown (Ctrl+C)
+- Obstacle entity (for God Mode / external API)
 
 ## What's Planned
-- Phase 3: Image reveal mechanic (canvas layer stack, bitmask grid)
-- Phase 4: Power-up system (plugin registry)
-- Phase 5: External API for Touch Designer (REST + WebSocket)
-- Phase 6: Polish, lobby, visual effects, round management
+- Phase 5: External API for Touch Designer (REST + WebSocket) — God Mode, image push, guess checking
+- Phase 6: Polish — lobby screen, visual effects, death animations, sound
