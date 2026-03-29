@@ -103,13 +103,6 @@ export class Snake {
     };
   }
 
-  grow(count: number = 1): void {
-    const tail = this.segments[this.segments.length - 1];
-    for (let i = 0; i < count; i++) {
-      this.segments.push({ x: tail.x, y: tail.y });
-    }
-  }
-
   kill(): void {
     this.alive = false;
   }
