@@ -8,11 +8,12 @@ import {
   SNAKE_INITIAL_LENGTH,
   REVEAL_BRUSH_RADIUS,
   headingToVector,
+  distance,
 } from '@snakegame/shared';
 
 export class Snake {
   readonly id: string;
-  segments: Vector2D[];
+  segments: Vector2D[] = [];
   angle: number;
   speed: number;
   turnRate: number;
@@ -26,6 +27,10 @@ export class Snake {
   ghosting: boolean;
   turnDirection: -1 | 0 | 1 = 0;
   boosting = false;
+
+  // Path history: dense trail of head positions
+  private path: Vector2D[] = [];
+  private pathLength = 0; // total distance along path
 
   constructor(name: string, color: string, spawnPos: Vector2D, spawnAngle: number) {
     this.id = uuid();
@@ -41,15 +46,27 @@ export class Snake {
     this.revealRadius = REVEAL_BRUSH_RADIUS;
     this.ghosting = false;
 
-    // Build initial segments behind the head
-    const dir = headingToVector(spawnAngle + Math.PI); // opposite of heading
-    this.segments = [];
-    for (let i = 0; i < SNAKE_INITIAL_LENGTH; i++) {
-      this.segments.push({
-        x: spawnPos.x + dir.x * i * SNAKE_SEGMENT_SPACING,
-        y: spawnPos.y + dir.y * i * SNAKE_SEGMENT_SPACING,
+    this.buildInitialPath(spawnPos, spawnAngle);
+  }
+
+  private buildInitialPath(spawnPos: Vector2D, spawnAngle: number): void {
+    const dir = headingToVector(spawnAngle + Math.PI);
+    const totalPathLength = SNAKE_SEGMENT_SPACING * SNAKE_INITIAL_LENGTH;
+
+    // Build dense path points (every 2px)
+    this.path = [];
+    const step = 2;
+    const numPoints = Math.ceil(totalPathLength / step) + 1;
+    for (let i = 0; i < numPoints; i++) {
+      const d = i * step;
+      this.path.push({
+        x: spawnPos.x + dir.x * d,
+        y: spawnPos.y + dir.y * d,
       });
     }
+    this.pathLength = (numPoints - 1) * step;
+
+    this.rebuildSegments();
   }
 
   update(dt: number): void {
@@ -61,29 +78,66 @@ export class Snake {
     // Move head forward
     const dir = headingToVector(this.angle);
     const moveDistance = this.speed * dt;
-    const head = this.segments[0];
+    const head = this.path[0];
     const newHead: Vector2D = {
       x: head.x + dir.x * moveDistance,
       y: head.y + dir.y * moveDistance,
     };
 
-    // Shift segments: each follows the one ahead
-    for (let i = this.segments.length - 1; i > 0; i--) {
-      const target = this.segments[i - 1];
-      const current = this.segments[i];
-      const dx = target.x - current.x;
-      const dy = target.y - current.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > SNAKE_SEGMENT_SPACING) {
-        const ratio = SNAKE_SEGMENT_SPACING / dist;
-        this.segments[i] = {
-          x: target.x - dx * ratio,
-          y: target.y - dy * ratio,
-        };
-      }
+    // Prepend new head position to path
+    this.path.unshift(newHead);
+    this.pathLength += moveDistance;
+
+    // Trim path: keep enough length for all segments
+    const neededLength = SNAKE_SEGMENT_SPACING * SNAKE_INITIAL_LENGTH + 10;
+    while (this.path.length > 2 && this.pathLength > neededLength) {
+      const last = this.path[this.path.length - 1];
+      const prev = this.path[this.path.length - 2];
+      const segDist = distance(last, prev);
+      this.path.pop();
+      this.pathLength -= segDist;
     }
 
-    this.segments[0] = newHead;
+    this.rebuildSegments();
+  }
+
+  /** Place segments at evenly-spaced distances along the path */
+  private rebuildSegments(): void {
+    this.segments = [];
+
+    if (this.path.length === 0) return;
+    this.segments.push({ ...this.path[0] }); // head
+
+    let distAccum = 0;
+    let nextSegDist = SNAKE_SEGMENT_SPACING;
+    let pathIdx = 0;
+
+    for (let seg = 1; seg < SNAKE_INITIAL_LENGTH; seg++) {
+      // Walk along path until we've traveled nextSegDist
+      while (pathIdx < this.path.length - 1) {
+        const segLen = distance(this.path[pathIdx], this.path[pathIdx + 1]);
+        if (distAccum + segLen >= nextSegDist) {
+          // Interpolate position along this path segment
+          const remaining = nextSegDist - distAccum;
+          const t = remaining / segLen;
+          this.segments.push({
+            x: this.path[pathIdx].x + (this.path[pathIdx + 1].x - this.path[pathIdx].x) * t,
+            y: this.path[pathIdx].y + (this.path[pathIdx + 1].y - this.path[pathIdx].y) * t,
+          });
+          distAccum = nextSegDist;
+          nextSegDist += SNAKE_SEGMENT_SPACING;
+          break;
+        }
+        distAccum += segLen;
+        pathIdx++;
+      }
+
+      // If we ran out of path, place segment at the last path point
+      if (this.segments.length <= seg) {
+        const last = this.path[this.path.length - 1];
+        this.segments.push({ x: last.x, y: last.y });
+      }
+    }
   }
 
   toState(): SnakeState {
@@ -124,13 +178,6 @@ export class Snake {
     this.revealRadius = REVEAL_BRUSH_RADIUS;
     this.ghosting = false;
 
-    const dir = headingToVector(angle + Math.PI);
-    this.segments = [];
-    for (let i = 0; i < SNAKE_INITIAL_LENGTH; i++) {
-      this.segments.push({
-        x: pos.x + dir.x * i * SNAKE_SEGMENT_SPACING,
-        y: pos.y + dir.y * i * SNAKE_SEGMENT_SPACING,
-      });
-    }
+    this.buildInitialPath(pos, angle);
   }
 }
