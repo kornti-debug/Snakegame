@@ -104,39 +104,39 @@ export class Snake {
   /** Place segments at evenly-spaced distances along the path */
   private rebuildSegments(): void {
     this.segments = [];
-
     if (this.path.length === 0) return;
+
     this.segments.push({ ...this.path[0] }); // head
 
-    let distAccum = 0;
+    let walkedDist = 0;
     let nextSegDist = SNAKE_SEGMENT_SPACING;
-    let pathIdx = 0;
 
-    for (let seg = 1; seg < SNAKE_INITIAL_LENGTH; seg++) {
-      // Walk along path until we've traveled nextSegDist
-      while (pathIdx < this.path.length - 1) {
-        const segLen = distance(this.path[pathIdx], this.path[pathIdx + 1]);
-        if (distAccum + segLen >= nextSegDist) {
-          // Interpolate position along this path segment
-          const remaining = nextSegDist - distAccum;
-          const t = remaining / segLen;
-          this.segments.push({
-            x: this.path[pathIdx].x + (this.path[pathIdx + 1].x - this.path[pathIdx].x) * t,
-            y: this.path[pathIdx].y + (this.path[pathIdx + 1].y - this.path[pathIdx].y) * t,
-          });
-          distAccum = nextSegDist;
-          nextSegDist += SNAKE_SEGMENT_SPACING;
-          break;
-        }
-        distAccum += segLen;
-        pathIdx++;
+    for (let i = 0; i < this.path.length - 1 && this.segments.length < SNAKE_INITIAL_LENGTH; i++) {
+      const dx = this.path[i + 1].x - this.path[i].x;
+      const dy = this.path[i + 1].y - this.path[i].y;
+      const edgeLen = Math.sqrt(dx * dx + dy * dy);
+      if (edgeLen === 0) continue;
+
+      const edgeStart = walkedDist;
+      const edgeEnd = walkedDist + edgeLen;
+
+      // Place all segments that fall within this edge
+      while (nextSegDist <= edgeEnd && this.segments.length < SNAKE_INITIAL_LENGTH) {
+        const t = (nextSegDist - edgeStart) / edgeLen;
+        this.segments.push({
+          x: this.path[i].x + dx * t,
+          y: this.path[i].y + dy * t,
+        });
+        nextSegDist += SNAKE_SEGMENT_SPACING;
       }
 
-      // If we ran out of path, place segment at the last path point
-      if (this.segments.length <= seg) {
-        const last = this.path[this.path.length - 1];
-        this.segments.push({ x: last.x, y: last.y });
-      }
+      walkedDist = edgeEnd;
+    }
+
+    // Fill remaining segments at the tail if path is too short
+    const last = this.path[this.path.length - 1];
+    while (this.segments.length < SNAKE_INITIAL_LENGTH) {
+      this.segments.push({ x: last.x, y: last.y });
     }
   }
 
