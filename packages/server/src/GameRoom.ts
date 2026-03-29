@@ -78,11 +78,12 @@ export class GameRoom {
     this.players.clear();
     this.tick = 0;
 
-    // Create snakes from lobby players
+    // Create snakes from lobby players (hidden until round starts)
     for (const [key, lobbyPlayer] of this.lobbyPlayers) {
       const socketId = key.split(':')[0];
       const { pos, angle } = this.getSpawnPoint();
       const snake = new Snake(lobbyPlayer.name, lobbyPlayer.color, pos, angle);
+      snake.alive = false; // hidden during countdown, respawned when round starts
 
       if (!this.players.has(socketId)) {
         this.players.set(socketId, new Map());

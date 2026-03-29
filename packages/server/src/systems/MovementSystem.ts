@@ -17,6 +17,7 @@ export class MovementSystem {
     // Wall collision: kill the snake if it goes out of bounds
     if (head.x - r < 0 || head.x + r > ARENA_WIDTH ||
         head.y - r < 0 || head.y + r > ARENA_HEIGHT) {
+      console.log(`[Wall] ${snake.name} died: head=(${head.x.toFixed(0)},${head.y.toFixed(0)}), speed=${snake.speed}`);
       snake.kill();
     }
   }

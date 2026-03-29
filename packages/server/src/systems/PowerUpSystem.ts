@@ -51,7 +51,9 @@ export class PowerUpSystem {
 
         if (distanceSq(snake.segments[0], powerUp.position) < collectRadiusSq) {
           powerUp.collected = true;
+          console.log(`[PowerUp] ${snake.name} collected ${powerUp.definition.id}, speed before=${snake.speed}`);
           powerUp.definition.onApply(snake);
+          console.log(`[PowerUp] ${snake.name} speed after=${snake.speed}, segments=${snake.segments.length}`);
 
           if (powerUp.definition.duration > 0) {
             this.activeEffects.push({
