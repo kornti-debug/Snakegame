@@ -1,80 +1,70 @@
-import type { GameSnapshot } from '@snakegame/shared';
+import type { GameSnapshot, RevealDelta } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
-import { drawSnake } from './SnakeRenderer.js';
+import { BackgroundLayer } from './layers/BackgroundLayer.js';
+import { RevealLayer } from './layers/RevealLayer.js';
+import { GameLayer } from './layers/GameLayer.js';
+import { UILayer } from './layers/UILayer.js';
 
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
 
+  private backgroundLayer: BackgroundLayer;
+  private revealLayer: RevealLayer;
+  private gameLayer: GameLayer;
+  private uiLayer: UILayer;
+
   constructor(container: HTMLElement) {
+    // Main visible canvas (composites all layers)
     this.canvas = document.createElement('canvas');
     this.canvas.width = ARENA_WIDTH;
     this.canvas.height = ARENA_HEIGHT;
     this.canvas.style.width = '100%';
     this.canvas.style.height = '100%';
     this.canvas.style.objectFit = 'contain';
-    this.canvas.style.background = '#111';
+    this.canvas.style.background = '#000';
     container.appendChild(this.canvas);
 
     this.ctx = this.canvas.getContext('2d')!;
+
+    // Create offscreen layers
+    this.backgroundLayer = new BackgroundLayer();
+    this.revealLayer = new RevealLayer();
+    this.gameLayer = new GameLayer();
+    this.uiLayer = new UILayer();
+  }
+
+  applyRevealDelta(delta: RevealDelta): void {
+    this.revealLayer.applyDelta(delta);
+  }
+
+  async loadImage(url: string): Promise<void> {
+    await this.backgroundLayer.loadImage(url);
+  }
+
+  resetRound(): void {
+    this.backgroundLayer.reset();
+    this.revealLayer.reset();
   }
 
   render(snapshot: GameSnapshot): void {
     const ctx = this.ctx;
-    const { width, height } = snapshot.arena;
 
-    // Clear
-    ctx.clearRect(0, 0, width, height);
+    // Clear main canvas
+    ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
-    // Background
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, width, height);
+    // Layer 1: Background image (hidden picture)
+    ctx.drawImage(this.backgroundLayer.canvas, 0, 0);
 
-    // Grid
-    this.drawGrid(ctx, width, height);
+    // Layer 2: Reveal mask (covers the image, holes show through)
+    ctx.drawImage(this.revealLayer.canvas, 0, 0);
 
-    // Border
-    ctx.strokeStyle = '#444';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, width - 4, height - 4);
+    // Layer 3: Game objects (snakes, powerups)
+    this.gameLayer.render(snapshot);
+    ctx.drawImage(this.gameLayer.canvas, 0, 0);
 
-    // Snakes
-    for (const snake of snapshot.snakes) {
-      drawSnake(ctx, snake);
-    }
-
-    // HUD
-    this.drawHUD(ctx, snapshot);
-  }
-
-  private drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-    ctx.lineWidth = 1;
-    const step = 40;
-    for (let x = 0; x <= w; x += step) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= h; y += step) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
-    }
-  }
-
-  private drawHUD(ctx: CanvasRenderingContext2D, snapshot: GameSnapshot): void {
-    ctx.font = '20px monospace';
-    ctx.textAlign = 'left';
-
-    let y = 30;
-    for (const snake of snapshot.snakes) {
-      const status = snake.alive ? '' : ' [DEAD]';
-      ctx.fillStyle = snake.color;
-      ctx.fillText(`${snake.name}: ${snake.score}${status}`, 20, y);
-      y += 28;
-    }
+    // Layer 4: UI (HUD, scores)
+    this.uiLayer.render(snapshot);
+    ctx.drawImage(this.uiLayer.canvas, 0, 0);
   }
 }

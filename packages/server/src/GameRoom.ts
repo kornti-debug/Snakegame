@@ -1,8 +1,9 @@
-import type { GameSnapshot } from '@snakegame/shared';
+import type { GameSnapshot, RevealDelta } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS } from '@snakegame/shared';
 import { Snake } from './entities/Snake.js';
 import { MovementSystem } from './systems/MovementSystem.js';
 import { CollisionSystem } from './systems/CollisionSystem.js';
+import { RevealSystem } from './systems/RevealSystem.js';
 
 export class GameRoom {
   // Map<socketId, Map<playerIndex, Snake>>
@@ -10,6 +11,7 @@ export class GameRoom {
   private tick = 0;
   private movementSystem = new MovementSystem();
   private collisionSystem = new CollisionSystem();
+  readonly revealSystem = new RevealSystem();
   private respawnTimers = new Map<string, number>(); // snakeId -> timer
   private colorCounter = 0;
 
@@ -71,6 +73,7 @@ export class GameRoom {
 
     this.movementSystem.update(snakes, dt);
     this.collisionSystem.update(snakes);
+    this.revealSystem.update(snakes);
 
     // Queue respawn for dead snakes
     for (const snake of snakes) {
@@ -86,6 +89,7 @@ export class GameRoom {
       timestamp: Date.now(),
       snakes: this.getAllSnakes().map(s => s.toState()),
       arena: { width: ARENA_WIDTH, height: ARENA_HEIGHT },
+      revealPercentage: this.revealSystem.getRevealPercentage(),
     };
   }
 

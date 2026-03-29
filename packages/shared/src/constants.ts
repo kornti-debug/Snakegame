@@ -10,6 +10,12 @@ export const SNAKE_RADIUS = 8;          // collision/render radius
 export const SNAKE_SEGMENT_SPACING = 12; // distance between segments
 export const SNAKE_INITIAL_LENGTH = 20;  // number of segments at spawn
 
+// Reveal system
+export const REVEAL_BLOCK_SIZE = 4;   // pixels per block
+export const REVEAL_GRID_WIDTH = Math.ceil(ARENA_WIDTH / REVEAL_BLOCK_SIZE);
+export const REVEAL_GRID_HEIGHT = Math.ceil(ARENA_HEIGHT / REVEAL_BLOCK_SIZE);
+export const REVEAL_BRUSH_RADIUS = 20; // pixels - how wide the snake reveals
+
 export const PLAYER_COLORS = [
   '#FF4444', // red
   '#44AAFF', // blue

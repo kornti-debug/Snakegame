@@ -1,9 +1,10 @@
-import type { GameSnapshot, Vector2D } from './game.js';
+import type { GameSnapshot, RevealDelta } from './game.js';
 
 export interface ServerToClientEvents {
   'game:snapshot': (snapshot: GameSnapshot) => void;
+  'game:reveal-update': (delta: RevealDelta) => void;
   'game:player-died': (payload: { playerId: string; killerId: string | null }) => void;
-  'game:round-start': (payload: { roundNumber: number }) => void;
+  'game:round-start': (payload: { roundNumber: number; imageUrl: string }) => void;
   'game:round-end': (payload: { scores: Record<string, number> }) => void;
 }
 

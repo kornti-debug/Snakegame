@@ -21,7 +21,6 @@ const LOCAL_PLAYERS = 2;
 // --- Socket ---
 socket.on('connect', () => {
   console.log('[Client] Connected to server');
-  // Join both local players
   for (let i = 0; i < LOCAL_PLAYERS; i++) {
     socket.emit('player:join', { name: `Player ${i + 1}`, playerIndex: i });
   }
@@ -31,8 +30,22 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
   buffer.push(snapshot);
 });
 
+socket.on('game:reveal-update', (delta) => {
+  renderer.applyRevealDelta(delta);
+});
+
 socket.on('game:player-died', ({ playerId, killerId }) => {
   console.log(`[Game] Player ${playerId} died${killerId ? ` (killed by ${killerId})` : ''}`);
+});
+
+socket.on('game:round-start', ({ roundNumber, imageUrl }) => {
+  console.log(`[Game] Round ${roundNumber} starting`);
+  renderer.resetRound();
+  if (imageUrl) {
+    renderer.loadImage(imageUrl).catch(err => {
+      console.warn('[Game] Failed to load round image:', err);
+    });
+  }
 });
 
 // --- Input tracking ---

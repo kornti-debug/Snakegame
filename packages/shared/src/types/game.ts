@@ -16,11 +16,17 @@ export interface SnakeState {
   score: number;
 }
 
+export interface RevealDelta {
+  /** Flat array of [blockX, blockY] pairs */
+  blocks: number[];
+}
+
 export interface GameSnapshot {
   tick: number;
   timestamp: number;
   snakes: SnakeState[];
   arena: ArenaConfig;
+  revealPercentage: number;
 }
 
 export interface ArenaConfig {

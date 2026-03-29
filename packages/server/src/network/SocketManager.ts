@@ -48,5 +48,10 @@ export class SocketManager {
   broadcastSnapshot(): void {
     const snapshot = this.room.getSnapshot();
     this.io.emit('game:snapshot', snapshot);
+
+    const revealDelta = this.room.revealSystem.flushDelta();
+    if (revealDelta) {
+      this.io.emit('game:reveal-update', revealDelta);
+    }
   }
 }
