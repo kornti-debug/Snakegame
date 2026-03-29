@@ -1,6 +1,8 @@
 import type { Snake } from '../entities/Snake.js';
 import type { Obstacle } from '../entities/Obstacle.js';
-import { distanceSq } from '@snakegame/shared';
+import { distanceSq, SNAKE_SPEED } from '@snakegame/shared';
+
+const BASE_SELF_SKIP = 10;
 
 export class CollisionSystem {
   update(snakes: Snake[], obstacles: Obstacle[] = []): void {
@@ -13,7 +15,9 @@ export class CollisionSystem {
 
       // Snake-vs-snake collisions
       for (const other of alive) {
-        const startIdx = snake === other ? 10 : 0;
+        // Scale self-collision skip with speed to prevent false self-kills
+        const selfSkip = Math.ceil(BASE_SELF_SKIP * (snake.speed / SNAKE_SPEED));
+        const startIdx = snake === other ? selfSkip : 0;
         const collisionDist = snake.radius + other.radius;
         const collisionDistSq = collisionDist * collisionDist;
 
