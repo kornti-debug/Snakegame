@@ -4,6 +4,7 @@ import {
   REVEAL_BLOCK_SIZE,
   REVEAL_GRID_WIDTH,
   REVEAL_GRID_HEIGHT,
+  GROWTH_BLOCKS_PER_SEGMENT,
 } from '@snakegame/shared';
 
 export class RevealSystem {
@@ -12,6 +13,7 @@ export class RevealSystem {
   private totalBlocks: number;
   private revealedCount = 0;
   private revealCounts = new Map<string, number>(); // snakeId → count
+  private growthAccumulator = new Map<string, number>(); // tracks blocks since last growth
   private pendingDelta: number[] = [];
 
   constructor() {
@@ -23,6 +25,7 @@ export class RevealSystem {
     this.grid.fill(0);
     this.revealedCount = 0;
     this.revealCounts.clear();
+    this.growthAccumulator.clear();
     this.pendingDelta = [];
   }
 
@@ -60,7 +63,17 @@ export class RevealSystem {
       if (snakeNewBlocks > 0) {
         const current = this.revealCounts.get(snake.id) ?? 0;
         this.revealCounts.set(snake.id, current + snakeNewBlocks);
-        snake.revealScore = (this.revealCounts.get(snake.id) ?? 0);
+        snake.revealScore = current + snakeNewBlocks;
+
+        // Permanent growth
+        const accum = (this.growthAccumulator.get(snake.id) ?? 0) + snakeNewBlocks;
+        const segmentsToAdd = Math.floor(accum / GROWTH_BLOCKS_PER_SEGMENT);
+        if (segmentsToAdd > 0) {
+          snake.grow(segmentsToAdd);
+          this.growthAccumulator.set(snake.id, accum % GROWTH_BLOCKS_PER_SEGMENT);
+        } else {
+          this.growthAccumulator.set(snake.id, accum);
+        }
       }
     }
   }

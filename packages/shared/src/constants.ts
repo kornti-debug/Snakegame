@@ -16,6 +16,9 @@ export const REVEAL_GRID_WIDTH = Math.ceil(ARENA_WIDTH / REVEAL_BLOCK_SIZE);
 export const REVEAL_GRID_HEIGHT = Math.ceil(ARENA_HEIGHT / REVEAL_BLOCK_SIZE);
 export const REVEAL_BRUSH_RADIUS = 20; // pixels - how wide the snake reveals
 
+// Snake growth
+export const GROWTH_BLOCKS_PER_SEGMENT = 40; // reveal this many blocks to grow 1 segment
+
 // Round system
 export const ROUND_DURATION = 90_000;       // ms - how long a round lasts
 export const ROUND_WAIT_TIME = 5_000;       // ms - countdown before round starts
