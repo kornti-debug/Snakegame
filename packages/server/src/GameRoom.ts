@@ -78,12 +78,11 @@ export class GameRoom {
     this.players.clear();
     this.tick = 0;
 
-    // Create snakes from lobby players (hidden until round starts)
+    // Create snakes from lobby players — visible during countdown
     for (const [key, lobbyPlayer] of this.lobbyPlayers) {
       const socketId = key.split(':')[0];
       const { pos, angle } = this.getSpawnPoint();
       const snake = new Snake(lobbyPlayer.name, lobbyPlayer.color, pos, angle);
-      snake.alive = false; // hidden during countdown, respawned when round starts
 
       if (!this.players.has(socketId)) {
         this.players.set(socketId, new Map());
@@ -214,6 +213,8 @@ export class GameRoom {
   }
 
   private resetForNewRound(snakes: Snake[]): void {
+    const isFirstRound = this.roundManager.roundNumber === 1;
+
     this.revealSystem.reset();
     this.powerUpSystem.expireAll(snakes);
     this.powerUpSystem.reset();
@@ -222,8 +223,14 @@ export class GameRoom {
 
     for (const snake of snakes) {
       snake.resetForRound();
-      const { pos, angle } = this.getSpawnPoint();
-      snake.respawn(pos, angle);
+      if (!isFirstRound) {
+        // Subsequent rounds: respawn at new positions
+        const { pos, angle } = this.getSpawnPoint();
+        snake.respawn(pos, angle);
+      } else {
+        // First round: keep positions from countdown, just ensure alive
+        snake.alive = true;
+      }
     }
   }
 

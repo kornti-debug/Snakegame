@@ -88,8 +88,8 @@ export class Snake {
     this.path.unshift(newHead);
     this.pathLength += moveDistance;
 
-    // Trim path: keep enough length for all segments
-    const neededLength = SNAKE_SEGMENT_SPACING * SNAKE_INITIAL_LENGTH + 10;
+    // Trim path: keep enough length for all segments + generous buffer
+    const neededLength = SNAKE_SEGMENT_SPACING * SNAKE_INITIAL_LENGTH * 2;
     while (this.path.length > 2 && this.pathLength > neededLength) {
       const last = this.path[this.path.length - 1];
       const prev = this.path[this.path.length - 2];
