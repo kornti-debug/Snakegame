@@ -46,6 +46,22 @@ export class SocketManager {
   }
 
   broadcastSnapshot(): void {
+    // Emit pending game events
+    for (const event of this.room.pendingEvents) {
+      if (event.type === 'round-start') {
+        this.io.emit('game:round-start', {
+          roundNumber: event.roundNumber,
+          imageUrl: '', // placeholder — Touch Designer will provide images later
+        });
+      } else if (event.type === 'round-end') {
+        this.io.emit('game:round-end', {
+          roundNumber: event.roundNumber,
+          winner: event.winner,
+          scores: event.scores,
+        });
+      }
+    }
+
     const snapshot = this.room.getSnapshot();
     this.io.emit('game:snapshot', snapshot);
 

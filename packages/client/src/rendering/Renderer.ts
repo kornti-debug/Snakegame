@@ -47,6 +47,10 @@ export class Renderer {
     this.revealLayer.reset();
   }
 
+  showWinner(name: string, score: number): void {
+    this.uiLayer.showWinner(name, score);
+  }
+
   render(snapshot: GameSnapshot): void {
     const ctx = this.ctx;
 

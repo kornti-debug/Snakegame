@@ -5,7 +5,11 @@ export interface ServerToClientEvents {
   'game:reveal-update': (delta: RevealDelta) => void;
   'game:player-died': (payload: { playerId: string; killerId: string | null }) => void;
   'game:round-start': (payload: { roundNumber: number; imageUrl: string }) => void;
-  'game:round-end': (payload: { scores: Record<string, number> }) => void;
+  'game:round-end': (payload: {
+    roundNumber: number;
+    winner: { id: string; name: string; score: number } | null;
+    scores: Record<string, number>;
+  }) => void;
 }
 
 export interface ClientToServerEvents {

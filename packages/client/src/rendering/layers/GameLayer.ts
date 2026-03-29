@@ -1,10 +1,11 @@
-import type { GameSnapshot } from '@snakegame/shared';
+import type { GameSnapshot, PowerUpState, ObstacleState } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
 import { drawSnake } from '../SnakeRenderer.js';
 
 export class GameLayer {
   readonly canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  private pulseTime = 0;
 
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -16,6 +17,7 @@ export class GameLayer {
   render(snapshot: GameSnapshot): void {
     const ctx = this.ctx;
     const { width, height } = snapshot.arena;
+    this.pulseTime += 0.05;
 
     ctx.clearRect(0, 0, width, height);
 
@@ -24,9 +26,87 @@ export class GameLayer {
     ctx.lineWidth = 4;
     ctx.strokeRect(2, 2, width - 4, height - 4);
 
+    // Obstacles
+    for (const obstacle of snapshot.obstacles) {
+      this.drawObstacle(ctx, obstacle);
+    }
+
+    // Power-ups
+    for (const powerUp of snapshot.powerUps) {
+      this.drawPowerUp(ctx, powerUp);
+    }
+
     // Snakes
     for (const snake of snapshot.snakes) {
       drawSnake(ctx, snake);
+    }
+  }
+
+  private drawPowerUp(ctx: CanvasRenderingContext2D, pu: PowerUpState): void {
+    const { x, y } = pu.position;
+    const pulse = 1 + Math.sin(this.pulseTime * 3) * 0.15;
+    const r = 14 * pulse;
+
+    // Glow
+    ctx.shadowColor = pu.renderHint.color;
+    ctx.shadowBlur = 15;
+
+    ctx.fillStyle = pu.renderHint.color;
+    ctx.globalAlpha = 0.9;
+
+    if (pu.renderHint.shape === 'diamond') {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-r * 0.7, -r * 0.7, r * 1.4, r * 1.4);
+      ctx.restore();
+    } else if (pu.renderHint.shape === 'star') {
+      this.drawStar(ctx, x, y, r);
+    } else {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Inner icon
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const icon = pu.type === 'speed-boost' ? '⚡' : pu.type === 'wide-trail' ? '◎' : '👻';
+    ctx.fillText(icon, x, y);
+
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  private drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+      const method = i === 0 ? 'moveTo' : 'lineTo';
+      ctx[method](cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  private drawObstacle(ctx: CanvasRenderingContext2D, obs: ObstacleState): void {
+    ctx.fillStyle = 'rgba(255, 50, 50, 0.4)';
+    ctx.strokeStyle = 'rgba(255, 50, 50, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.fillRect(obs.position.x, obs.position.y, obs.width, obs.height);
+    ctx.strokeRect(obs.position.x, obs.position.y, obs.width, obs.height);
+
+    // Hazard stripes
+    ctx.strokeStyle = 'rgba(255, 200, 0, 0.3)';
+    ctx.lineWidth = 1;
+    const step = 12;
+    for (let i = -obs.height; i < obs.width; i += step) {
+      ctx.beginPath();
+      ctx.moveTo(obs.position.x + i, obs.position.y);
+      ctx.lineTo(obs.position.x + i + obs.height, obs.position.y + obs.height);
+      ctx.stroke();
     }
   }
 }

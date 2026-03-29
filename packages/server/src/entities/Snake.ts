@@ -6,6 +6,7 @@ import {
   SNAKE_RADIUS,
   SNAKE_SEGMENT_SPACING,
   SNAKE_INITIAL_LENGTH,
+  REVEAL_BRUSH_RADIUS,
   headingToVector,
 } from '@snakegame/shared';
 
@@ -20,6 +21,9 @@ export class Snake {
   color: string;
   name: string;
   score: number;
+  revealScore: number;
+  revealRadius: number;
+  ghosting: boolean;
   turnDirection: -1 | 0 | 1 = 0;
   boosting = false;
 
@@ -33,6 +37,9 @@ export class Snake {
     this.color = color;
     this.name = name;
     this.score = 0;
+    this.revealScore = 0;
+    this.revealRadius = REVEAL_BRUSH_RADIUS;
+    this.ghosting = false;
 
     // Build initial segments behind the head
     const dir = headingToVector(spawnAngle + Math.PI); // opposite of heading
@@ -91,11 +98,20 @@ export class Snake {
       color: this.color,
       name: this.name,
       score: this.score,
+      revealScore: this.revealScore,
+      ghosting: this.ghosting,
     };
   }
 
   kill(): void {
     this.alive = false;
+  }
+
+  resetForRound(): void {
+    this.revealScore = 0;
+    this.revealRadius = REVEAL_BRUSH_RADIUS;
+    this.ghosting = false;
+    this.speed = SNAKE_SPEED;
   }
 
   respawn(pos: Vector2D, angle: number): void {
@@ -105,6 +121,8 @@ export class Snake {
     this.boosting = false;
     this.speed = SNAKE_SPEED;
     this.radius = SNAKE_RADIUS;
+    this.revealRadius = REVEAL_BRUSH_RADIUS;
+    this.ghosting = false;
 
     const dir = headingToVector(angle + Math.PI);
     this.segments = [];

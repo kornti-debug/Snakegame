@@ -4,13 +4,14 @@ import {
   REVEAL_BLOCK_SIZE,
   REVEAL_GRID_WIDTH,
   REVEAL_GRID_HEIGHT,
-  REVEAL_BRUSH_RADIUS,
 } from '@snakegame/shared';
 
 export class RevealSystem {
+  // Grid values: 0 = unrevealed, N = snakeIndex+1 (who revealed it)
   private grid: Uint8Array;
   private totalBlocks: number;
   private revealedCount = 0;
+  private revealCounts = new Map<string, number>(); // snakeId → count
   private pendingDelta: number[] = [];
 
   constructor() {
@@ -21,23 +22,25 @@ export class RevealSystem {
   reset(): void {
     this.grid.fill(0);
     this.revealedCount = 0;
+    this.revealCounts.clear();
     this.pendingDelta = [];
   }
 
   update(snakes: Snake[]): void {
-    const brushBlocks = Math.ceil(REVEAL_BRUSH_RADIUS / REVEAL_BLOCK_SIZE);
-
     for (const snake of snakes) {
       if (!snake.alive) continue;
 
+      const brushBlocks = Math.ceil(snake.revealRadius / REVEAL_BLOCK_SIZE);
       const head = snake.segments[0];
       const centerBX = Math.floor(head.x / REVEAL_BLOCK_SIZE);
       const centerBY = Math.floor(head.y / REVEAL_BLOCK_SIZE);
+      const brushBlocksSq = brushBlocks * brushBlocks;
+
+      let snakeNewBlocks = 0;
 
       for (let dy = -brushBlocks; dy <= brushBlocks; dy++) {
         for (let dx = -brushBlocks; dx <= brushBlocks; dx++) {
-          // Circle check
-          if (dx * dx + dy * dy > brushBlocks * brushBlocks) continue;
+          if (dx * dx + dy * dy > brushBlocksSq) continue;
 
           const bx = centerBX + dx;
           const by = centerBY + dy;
@@ -46,11 +49,18 @@ export class RevealSystem {
 
           const idx = by * REVEAL_GRID_WIDTH + bx;
           if (this.grid[idx] === 0) {
-            this.grid[idx] = 1;
+            this.grid[idx] = 1; // mark as revealed
             this.revealedCount++;
+            snakeNewBlocks++;
             this.pendingDelta.push(bx, by);
           }
         }
+      }
+
+      if (snakeNewBlocks > 0) {
+        const current = this.revealCounts.get(snake.id) ?? 0;
+        this.revealCounts.set(snake.id, current + snakeNewBlocks);
+        snake.revealScore = (this.revealCounts.get(snake.id) ?? 0);
       }
     }
   }
@@ -64,5 +74,13 @@ export class RevealSystem {
 
   getRevealPercentage(): number {
     return (this.revealedCount / this.totalBlocks) * 100;
+  }
+
+  getRevealScores(): Record<string, number> {
+    const scores: Record<string, number> = {};
+    for (const [id, count] of this.revealCounts) {
+      scores[id] = count;
+    }
+    return scores;
   }
 }

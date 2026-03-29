@@ -9,7 +9,7 @@ export function drawSnake(ctx: CanvasRenderingContext2D, snake: SnakeState): voi
   ctx.lineWidth = snake.radius * 2;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.globalAlpha = snake.alive ? 1 : 0.3;
+  ctx.globalAlpha = !snake.alive ? 0.3 : snake.ghosting ? 0.5 : 1;
 
   ctx.beginPath();
   ctx.moveTo(segments[0].x, segments[0].y);

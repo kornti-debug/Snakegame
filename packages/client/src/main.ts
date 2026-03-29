@@ -48,6 +48,13 @@ socket.on('game:round-start', ({ roundNumber, imageUrl }) => {
   }
 });
 
+socket.on('game:round-end', ({ roundNumber, winner, scores }) => {
+  console.log(`[Game] Round ${roundNumber} ended`, scores);
+  if (winner) {
+    renderer.showWinner(winner.name, winner.score);
+  }
+});
+
 // --- Input tracking ---
 const lastTurnDirection: (-1 | 0 | 1)[] = [0, 0];
 
