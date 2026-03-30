@@ -8,3 +8,4 @@ export type { InputState } from './types/input.js';
 
 export * from './constants.js';
 export * from './utils.js';
+export * from './grid.js';

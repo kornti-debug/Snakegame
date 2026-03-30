@@ -1,12 +1,14 @@
-import type { GameSnapshot, GamePhase, LobbyPlayer } from '@snakegame/shared';
+import type { GameSnapshot, GamePhase, LobbyPlayer, Vector2D } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS } from '@snakegame/shared';
 import { Snake } from './entities/Snake.js';
 import { Obstacle } from './entities/Obstacle.js';
+import { PowerUp } from './entities/PowerUp.js';
 import { MovementSystem } from './systems/MovementSystem.js';
 import { CollisionSystem } from './systems/CollisionSystem.js';
 import { RevealSystem } from './systems/RevealSystem.js';
 import { PowerUpSystem } from './systems/PowerUpSystem.js';
 import { RoundManager } from './RoundManager.js';
+import { ImageManager } from './api/ImageManager.js';
 
 export class GameRoom {
   gamePhase: GamePhase = 'lobby';
@@ -22,10 +24,15 @@ export class GameRoom {
   readonly revealSystem = new RevealSystem();
   readonly powerUpSystem = new PowerUpSystem();
   readonly roundManager = new RoundManager();
+  readonly imageManager: ImageManager;
   obstacles: Obstacle[] = [];
   private respawnTimers = new Map<string, number>();
 
   pendingEvents: GameEvent[] = [];
+
+  constructor(uploadDir: string) {
+    this.imageManager = new ImageManager(uploadDir);
+  }
 
   // --- Lobby ---
 
@@ -153,9 +160,12 @@ export class GameRoom {
 
     if (phaseChange === 'playing') {
       this.resetForNewRound(snakes);
+      const { imageUrl, word } = this.imageManager.startRound();
       this.pendingEvents.push({
         type: 'round-start',
         roundNumber: this.roundManager.roundNumber,
+        imageUrl,
+        word,
       });
     }
 
@@ -256,6 +266,24 @@ export class GameRoom {
     this.obstacles.push(new Obstacle({ x, y }, width, height, durationMs));
   }
 
+  spawnPowerUpAt(type: string, position: Vector2D): boolean {
+    const def = this.powerUpSystem.registry.get(type);
+    if (!def) return false;
+    const pu = new PowerUp(def, position);
+    this.powerUpSystem.getFieldPowerUps().push(pu);
+    return true;
+  }
+
+  handleCorrectGuess(viewerName: string): void {
+    if (this.roundManager.phase !== 'playing') return;
+    this.pendingEvents.push({
+      type: 'guess-correct',
+      viewerName,
+      word: this.imageManager.currentWord ?? '',
+    });
+    this.roundManager.forceEndRound();
+  }
+
   get snakeCount(): number {
     return this.getAllSnakes().length;
   }
@@ -273,5 +301,6 @@ export class GameRoom {
 }
 
 export type GameEvent =
-  | { type: 'round-start'; roundNumber: number }
-  | { type: 'round-end'; roundNumber: number; winner: { id: string; name: string; score: number } | null; scores: Record<string, number> };
+  | { type: 'round-start'; roundNumber: number; imageUrl: string; word: string }
+  | { type: 'round-end'; roundNumber: number; winner: { id: string; name: string; score: number } | null; scores: Record<string, number> }
+  | { type: 'guess-correct'; viewerName: string; word: string };

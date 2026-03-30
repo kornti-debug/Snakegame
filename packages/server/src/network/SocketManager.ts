@@ -1,28 +1,31 @@
 import { Server as HttpServer } from 'http';
-import { Server } from 'socket.io';
+import { Namespace, Server } from 'socket.io';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
   InterServerEvents,
   SocketData,
 } from '@snakegame/shared';
+import { cellToPixel, isValidCell } from '@snakegame/shared';
 import type { GameRoom } from '../GameRoom.js';
 
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
 
 export class SocketManager {
   readonly io: TypedServer;
+  private tdNamespace: Namespace;
+  private lastRevealMilestone = 0;
 
-  constructor(httpServer: HttpServer, private room: GameRoom) {
+  constructor(httpServer: HttpServer, private room: GameRoom, apiKey: string = '') {
     this.io = new Server(httpServer, {
       cors: { origin: '*' },
     });
 
+    // --- Game client namespace (default /) ---
     this.io.on('connection', (socket) => {
       console.log(`[Socket] Connected: ${socket.id}`);
       socket.data.playerIds = [];
 
-      // --- Lobby events ---
       socket.on('player:join', ({ name, playerIndex }) => {
         if (this.room.gamePhase === 'lobby') {
           this.room.lobbyJoin(socket.id, playerIndex, name);
@@ -60,7 +63,6 @@ export class SocketManager {
         }
       });
 
-      // --- In-game input ---
       socket.on('input:turn', (playerIndex, direction) => {
         const snake = this.room.getSnake(socket.id, playerIndex);
         if (snake) snake.turnDirection = direction;
@@ -76,21 +78,82 @@ export class SocketManager {
         this.room.removeAllPlayers(socket.id);
       });
     });
+
+    // --- Touch Designer namespace (/touchdesigner) ---
+    this.tdNamespace = this.io.of('/touchdesigner');
+
+    this.tdNamespace.use((socket, next) => {
+      if (apiKey && socket.handshake.auth?.apiKey !== apiKey) {
+        next(new Error('Invalid API key'));
+      } else {
+        next();
+      }
+    });
+
+    this.tdNamespace.on('connection', (socket) => {
+      console.log(`[TD] Connected: ${socket.id}`);
+
+      socket.on('command:set-image', ({ imageUrl, word, imageBase64 }) => {
+        this.room.imageManager.setNextImage(imageUrl ?? null, word, imageBase64);
+        console.log(`[TD] Image queued: word="${word}"`);
+      });
+
+      socket.on('command:guess', ({ viewerName, guess }) => {
+        const correct = this.room.imageManager.checkGuess(guess);
+        if (correct) {
+          this.room.handleCorrectGuess(viewerName ?? 'anonymous');
+        }
+        socket.emit('guess-result' as any, { correct, viewerName, guess });
+      });
+
+      socket.on('command:god-obstacle', ({ cell, durationMs }) => {
+        if (!isValidCell(cell)) return;
+        const pos = cellToPixel(cell)!;
+        this.room.addObstacle(pos.x - 40, pos.y - 10, 80, 20, durationMs ?? 15000);
+        console.log(`[TD] Obstacle placed at ${cell}`);
+      });
+
+      socket.on('command:god-powerup', ({ cell, type }) => {
+        if (!isValidCell(cell)) return;
+        const pos = cellToPixel(cell)!;
+        this.room.spawnPowerUpAt(type, pos);
+        console.log(`[TD] Power-up ${type} spawned at ${cell}`);
+      });
+
+      socket.on('disconnect', () => {
+        console.log(`[TD] Disconnected: ${socket.id}`);
+      });
+    });
   }
 
   broadcastSnapshot(): void {
-    // Emit pending game events
+    // Emit pending game events to both game clients and TD
     for (const event of this.room.pendingEvents) {
       if (event.type === 'round-start') {
         this.io.emit('game:round-start', {
           roundNumber: event.roundNumber,
-          imageUrl: '',
+          imageUrl: event.imageUrl,
         });
+        this.tdNamespace.emit('event:round-start', {
+          roundNumber: event.roundNumber,
+          word: event.word,
+        });
+        this.lastRevealMilestone = 0;
       } else if (event.type === 'round-end') {
         this.io.emit('game:round-end', {
           roundNumber: event.roundNumber,
           winner: event.winner,
           scores: event.scores,
+        });
+        this.tdNamespace.emit('event:round-end', {
+          roundNumber: event.roundNumber,
+          winner: event.winner,
+          scores: event.scores,
+        });
+      } else if (event.type === 'guess-correct') {
+        this.tdNamespace.emit('event:guess-correct', {
+          viewerName: event.viewerName,
+          word: event.word,
         });
       }
     }
@@ -102,6 +165,16 @@ export class SocketManager {
       const revealDelta = this.room.revealSystem.flushDelta();
       if (revealDelta) {
         this.io.emit('game:reveal-update', revealDelta);
+      }
+
+      // Reveal milestones for TD
+      const pct = snapshot.revealPercentage;
+      const milestones = [25, 50, 75, 90];
+      for (const m of milestones) {
+        if (pct >= m && this.lastRevealMilestone < m) {
+          this.tdNamespace.emit('event:reveal-milestone', { percentage: m });
+          this.lastRevealMilestone = m;
+        }
       }
     }
   }

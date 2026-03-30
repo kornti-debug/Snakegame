@@ -52,7 +52,48 @@ npm run dev:client
 - State interpolation (30Hz server → 60fps client)
 - Graceful server shutdown (Ctrl+C)
 - Obstacle entity (for God Mode / external API)
+- Lobby/menu system (player join, color selection, start game)
+- **External REST API** (`/api/external/*`) for Touch Designer integration
+- **WebSocket namespace** (`/touchdesigner`) for real-time TD events
+- Image management (push image + word, guess checking)
+- Grid coordinate system (A1-P9, 16x9 cells)
+- God Mode actions via API (place obstacles, spawn power-ups)
 
 ## What's Planned
-- Phase 5: External API for Touch Designer (REST + WebSocket) — God Mode, image push, guess checking
-- Phase 6: Polish — lobby screen, visual effects, death animations, sound
+- Phase 6: Polish — visual effects, death animations, sound
+- Touch Designer integration testing
+- Stream overlay data
+
+## External API (Touch Designer)
+
+### REST Endpoints (`/api/external/`)
+
+| Method | Endpoint | Body | Purpose |
+|--------|----------|------|---------|
+| GET | `/state` | — | Full game state summary |
+| GET | `/reveal-percentage` | — | Current reveal % |
+| POST | `/image` | `{ imageUrl, word, imageBase64? }` | Queue image for next round |
+| GET | `/image` | — | Current image state |
+| POST | `/guess` | `{ viewerName, guess }` | Submit Twitch viewer guess |
+| POST | `/god/obstacle` | `{ cell: "D5", durationMs? }` | Place obstacle at grid cell |
+| POST | `/god/powerup` | `{ cell: "H3", type }` | Spawn power-up at grid cell |
+| POST | `/round/start` | — | Force start round/game |
+| POST | `/round/end` | — | Force end current round |
+
+### WebSocket Namespace (`/touchdesigner`)
+Auth: `{ auth: { apiKey: "your-key" } }` (set `API_KEY` env var on server)
+
+**Server → TD events:**
+- `event:round-start` → `{ roundNumber, word }`
+- `event:round-end` → `{ roundNumber, winner, scores }`
+- `event:guess-correct` → `{ viewerName, word }`
+- `event:reveal-milestone` → `{ percentage }` (at 25/50/75/90%)
+
+**TD → Server commands:**
+- `command:set-image` → `{ imageUrl, word, imageBase64? }`
+- `command:guess` → `{ viewerName, guess }`
+- `command:god-obstacle` → `{ cell, durationMs? }`
+- `command:god-powerup` → `{ cell, type }`
+
+### Grid System
+Arena (1920x1080) divided into 16×9 cells (120×120px each). Columns A-P, rows 1-9. Example: `D5` = center of column D, row 5 = pixel (420, 540).
