@@ -17,13 +17,13 @@ import {
 } from '@snakegame/shared';
 import type { Snake } from '../entities/Snake.js';
 
-// Classic boids parameters (Nature of Code style)
+// Classic boids parameters (Nature of Code style, frame-based forces)
 const MAX_SPEED = BOID_SPEED;           // px/sec max velocity
-const MAX_FORCE = BOID_SPEED * 0.03;    // steering force cap — small = smooth turns
+const MAX_FORCE = BOID_SPEED * 0.025;   // per-tick steering cap — applied directly (no * dt)
 
 const SEPARATION_RADIUS = 35;           // push away from very close neighbors
-const ALIGNMENT_RADIUS = 70;            // align heading with nearby flock
-const COHESION_RADIUS = 90;             // steer toward center of nearby flock
+const ALIGNMENT_RADIUS = 100;           // align heading with nearby flock (wide)
+const COHESION_RADIUS = 120;            // steer toward center of nearby flock (wide)
 
 const SEPARATION_WEIGHT = 1.8;
 const ALIGNMENT_WEIGHT = 1.2;
@@ -72,8 +72,8 @@ export class BoidSystem {
       const s = speed * (0.85 + Math.random() * 0.3);
       this.boids.push({
         id: this.nextId++,
-        x: cx + (Math.random() - 0.5) * 80,
-        y: cy + (Math.random() - 0.5) * 80,
+        x: cx + (Math.random() - 0.5) * 40,
+        y: cy + (Math.random() - 0.5) * 40,
         vx: Math.cos(a) * s,
         vy: Math.sin(a) * s,
         leaderId: null,
@@ -104,9 +104,9 @@ export class BoidSystem {
     for (const boid of this.boids) {
       const acc = this.computeAcceleration(boid, snakeHeads);
 
-      // Apply acceleration to velocity
-      boid.vx += acc.x * dt;
-      boid.vy += acc.y * dt;
+      // Apply steering forces directly (frame-based, not time-based)
+      boid.vx += acc.x;
+      boid.vy += acc.y;
 
       // Clamp to max speed (but also enforce a minimum so they always move)
       const speed = Math.sqrt(boid.vx * boid.vx + boid.vy * boid.vy);

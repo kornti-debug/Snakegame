@@ -50,7 +50,7 @@ export class GameLayer {
   private drawPowerUp(ctx: CanvasRenderingContext2D, pu: PowerUpState): void {
     const { x, y } = pu.position;
     const pulse = 1 + Math.sin(this.pulseTime * 3) * 0.15;
-    const r = 16 * pulse;
+    const size = Math.round(24 * pulse);
 
     const iconMap: Record<string, string> = {
       'speed-boost': '⚡', 'wide-trail': '◎', 'ghost': '👻',
@@ -58,23 +58,14 @@ export class GameLayer {
     };
     const icon = iconMap[pu.type] ?? '?';
 
-    // Glowing circle background
+    // Emoji with colored glow — no circle background
     ctx.save();
     ctx.shadowColor = pu.renderHint.color;
-    ctx.shadowBlur = 18;
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = pu.renderHint.color;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
-
-    // Emoji icon — large, centered, matching the legend
-    ctx.font = `${Math.round(r * 1.4)}px sans-serif`;
+    ctx.shadowBlur = 16;
+    ctx.font = `${size}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(icon, x, y + 1);
+    ctx.fillText(icon, x, y);
     ctx.restore();
   }
 
