@@ -1,5 +1,5 @@
 import type { RoundPhase, RoundState } from '@snakegame/shared';
-import { ROUND_DURATION, ROUND_WAIT_TIME, ROUND_END_DISPLAY_TIME } from '@snakegame/shared';
+import { ROUND_DURATION_MEMORY, ROUND_WAIT_TIME, ROUND_END_DISPLAY_TIME } from '@snakegame/shared';
 
 export class RoundManager {
   phase: RoundPhase = 'waiting';
@@ -35,7 +35,7 @@ export class RoundManager {
   startRound(): void {
     this.roundNumber++;
     this.phase = 'playing';
-    this.timeRemainingMs = ROUND_DURATION;
+    this.timeRemainingMs = ROUND_DURATION_MEMORY;
     this.phaseJustChanged = true;
   }
 
@@ -45,7 +45,7 @@ export class RoundManager {
     this.phaseJustChanged = true;
   }
 
-  /** Call this when Twitch chat guesses correctly */
+  /** Force end (all pairs matched, or other trigger) */
   forceEndRound(): void {
     if (this.phase === 'playing') {
       this.endRound();
@@ -56,12 +56,13 @@ export class RoundManager {
     return this.phaseJustChanged;
   }
 
-  getRoundState(revealScores: Record<string, number>): RoundState {
+  getRoundState(revealScores: Record<string, number>, pairScores: Record<string, number>): RoundState {
     return {
       phase: this.phase,
       roundNumber: this.roundNumber,
       timeRemainingMs: Math.max(0, this.timeRemainingMs),
       revealScores,
+      pairScores,
     };
   }
 }

@@ -1,15 +1,28 @@
-import type { SnakeState, Vector2D } from '@snakegame/shared';
+import type { SnakeState } from '@snakegame/shared';
+
+let starTime = 0;
 
 export function drawSnake(ctx: CanvasRenderingContext2D, snake: SnakeState): void {
   const segments = snake.segments;
   if (segments.length < 2) return;
 
+  starTime += 0.02;
+
+  // Star powerup: rainbow cycling color + glow
+  let bodyColor = snake.color;
+  if (snake.starred) {
+    const hue = (starTime * 200 + snake.segments[0].x) % 360;
+    bodyColor = `hsl(${hue}, 100%, 60%)`;
+    ctx.shadowColor = bodyColor;
+    ctx.shadowBlur = 20;
+  }
+
   // Draw body as smooth curve
-  ctx.strokeStyle = snake.color;
+  ctx.strokeStyle = bodyColor;
   ctx.lineWidth = snake.radius * 2;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.globalAlpha = !snake.alive ? 0.3 : snake.ghosting ? 0.5 : 1;
+  ctx.globalAlpha = !snake.alive ? 0.3 : snake.ghosting && !snake.starred ? 0.5 : 1;
 
   ctx.beginPath();
   ctx.moveTo(segments[0].x, segments[0].y);
@@ -26,18 +39,41 @@ export function drawSnake(ctx: CanvasRenderingContext2D, snake: SnakeState): voi
   ctx.lineTo(last.x, last.y);
   ctx.stroke();
 
+  // Swarm leader indicator: subtle trail glow
+  if (snake.swarmLeader) {
+    ctx.save();
+    ctx.strokeStyle = '#88FFAA';
+    ctx.lineWidth = snake.radius * 3;
+    ctx.globalAlpha = 0.15;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Predator indicator: red aura
+  if (snake.predator) {
+    ctx.save();
+    ctx.strokeStyle = '#FF4466';
+    ctx.lineWidth = snake.radius * 3;
+    ctx.globalAlpha = 0.15;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+
   // Draw head
-  drawHead(ctx, snake);
+  drawHead(ctx, snake, bodyColor);
 
   ctx.globalAlpha = 1;
 }
 
-function drawHead(ctx: CanvasRenderingContext2D, snake: SnakeState): void {
+function drawHead(ctx: CanvasRenderingContext2D, snake: SnakeState, bodyColor: string): void {
   const head = snake.segments[0];
   const r = snake.radius * 1.4;
 
   // Head circle
-  ctx.fillStyle = snake.color;
+  ctx.fillStyle = bodyColor;
   ctx.beginPath();
   ctx.arc(head.x, head.y, r, 0, Math.PI * 2);
   ctx.fill();
@@ -58,7 +94,8 @@ function drawHead(ctx: CanvasRenderingContext2D, snake: SnakeState): void {
     ctx.arc(ex, ey, eyeR, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#000';
+    // Star powerup: sparkle eyes
+    ctx.fillStyle = snake.starred ? '#FFD700' : '#000';
     ctx.beginPath();
     ctx.arc(
       ex + Math.cos(snake.angle) * eyeR * 0.3,

@@ -4,7 +4,7 @@ import { Renderer } from './rendering/Renderer.js';
 import { LobbyRenderer } from './rendering/LobbyRenderer.js';
 import { InputManager } from './input/InputManager.js';
 import { KeyboardProvider } from './input/KeyboardProvider.js';
-import type { GameSnapshot, GamePhase, LobbyPlayer } from '@snakegame/shared';
+import type { GameSnapshot, GamePhase } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS } from '@snakegame/shared';
 
 // --- Setup ---
@@ -108,21 +108,33 @@ socket.on('game:player-died', ({ playerId, killerId }) => {
   console.log(`[Game] Player ${playerId} died${killerId ? ` (killed by ${killerId})` : ''}`);
 });
 
-socket.on('game:round-start', ({ roundNumber, imageUrl }) => {
-  console.log(`[Game] Round ${roundNumber} starting`);
+socket.on('game:round-start', ({ roundNumber, tiles }) => {
+  console.log(`[Game] Round ${roundNumber} starting with ${tiles?.length ?? 0} tiles`);
   renderer.resetRound();
-  if (imageUrl) {
-    renderer.loadImage(imageUrl).catch(err => {
-      console.warn('[Game] Failed to load round image:', err);
+  if (tiles && tiles.length > 0) {
+    renderer.loadTileImages(tiles).catch(err => {
+      console.warn('[Game] Failed to load tile images:', err);
     });
   }
 });
 
-socket.on('game:round-end', ({ roundNumber, winner, scores }) => {
-  console.log(`[Game] Round ${roundNumber} ended`, scores);
+socket.on('game:round-end', ({ roundNumber, winner, pairScores }) => {
+  console.log(`[Game] Round ${roundNumber} ended`, pairScores);
   if (winner) {
     renderer.showWinner(winner.name, winner.score);
   }
+});
+
+socket.on('game:tile-captured', ({ tileId, capturedBy, symbolName }) => {
+  console.log(`[Game] Tile ${tileId} (${symbolName}) captured by ${capturedBy}`);
+});
+
+socket.on('game:pair-matched', ({ pairId, symbolName, matchedBy }) => {
+  console.log(`[Game] Pair ${pairId} (${symbolName}) matched by ${matchedBy}!`);
+});
+
+socket.on('game:hint-active', ({ pairId, symbolName }) => {
+  console.log(`[Game] Hint active for pair ${pairId} (${symbolName})`);
 });
 
 // --- Input tracking ---

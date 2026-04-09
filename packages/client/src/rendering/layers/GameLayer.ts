@@ -1,5 +1,5 @@
-import type { GameSnapshot, PowerUpState, ObstacleState } from '@snakegame/shared';
-import { ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
+import type { GameSnapshot, PowerUpState, ObstacleState, BoidState } from '@snakegame/shared';
+import { ARENA_WIDTH, ARENA_HEIGHT, BOID_RADIUS } from '@snakegame/shared';
 import { drawSnake } from '../SnakeRenderer.js';
 
 export class GameLayer {
@@ -34,6 +34,11 @@ export class GameLayer {
     // Power-ups
     for (const powerUp of snapshot.powerUps) {
       this.drawPowerUp(ctx, powerUp);
+    }
+
+    // Boids (AI swarm)
+    for (const boid of snapshot.boids) {
+      this.drawBoid(ctx, boid);
     }
 
     // Snakes
@@ -73,7 +78,11 @@ export class GameLayer {
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const icon = pu.type === 'speed-boost' ? '⚡' : pu.type === 'wide-trail' ? '◎' : '👻';
+    const iconMap: Record<string, string> = {
+      'speed-boost': '⚡', 'wide-trail': '◎', 'ghost': '👻',
+      'star': '⭐', 'swarm-leader': '🐟', 'predator': '🦈',
+    };
+    const icon = iconMap[pu.type] ?? '?';
     ctx.fillText(icon, x, y);
 
     ctx.shadowBlur = 0;
@@ -89,6 +98,42 @@ export class GameLayer {
     }
     ctx.closePath();
     ctx.fill();
+  }
+
+  private drawBoid(ctx: CanvasRenderingContext2D, boid: BoidState): void {
+    const { x, y, angle, leaderId } = boid;
+    const r = BOID_RADIUS;
+
+    // Color: teal-ish for wild, greenish for following a leader
+    const color = leaderId ? '#88FFAA' : '#66CCDD';
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+
+    // Fish-like body: pointed triangle
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(r * 1.8, 0);            // nose
+    ctx.lineTo(-r * 1.2, -r * 1.0);    // top-left
+    ctx.lineTo(-r * 0.5, 0);           // indent
+    ctx.lineTo(-r * 1.2, r * 1.0);     // bottom-left
+    ctx.closePath();
+    ctx.fill();
+
+    // Eye
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(r * 0.6, -r * 0.2, r * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.arc(r * 0.7, -r * 0.2, r * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
   private drawObstacle(ctx: CanvasRenderingContext2D, obs: ObstacleState): void {

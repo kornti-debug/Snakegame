@@ -41,3 +41,52 @@ export const PLAYER_COLORS = [
   '#FFFF44', // yellow
   '#AA44FF', // purple
 ];
+
+// Memory card game
+export const MEMORY_TILE_COLS = 2;          // grid cells per tile horizontally
+export const MEMORY_TILE_ROWS = 2;          // grid cells per tile vertically
+export const MEMORY_TILE_WIDTH = 240;       // GRID_CELL_WIDTH * MEMORY_TILE_COLS
+export const MEMORY_TILE_HEIGHT = 240;      // GRID_CELL_HEIGHT * MEMORY_TILE_ROWS
+export const MEMORY_TILE_GAP = 8;           // pixels between tiles
+export const MEMORY_BOARD_COLS = 5;         // tile positions per row
+export const MEMORY_BOARD_ROWS = 4;         // tile positions per column
+export const MEMORY_PAIR_COUNT = 10;        // number of pairs
+export const MEMORY_TILE_COUNT = 20;        // total tiles (2 * MEMORY_PAIR_COUNT)
+export const MEMORY_CAPTURE_THRESHOLD = 0.9; // 90% reveal to capture
+export const HINT_DURATION = 8_000;         // ms hint highlight lasts
+export const ROUND_DURATION_MEMORY = 120_000; // ms — longer rounds for memory
+
+// Boid / AI swarm system
+export const BOID_COUNT_INITIAL = 12;         // starting boids
+export const BOID_SPAWN_INTERVAL = 15_000;    // ms between spawning new groups
+export const BOID_SPAWN_GROUP_SIZE = 3;       // boids per spawn group
+export const BOID_MAX_COUNT = 30;             // cap
+export const BOID_SPEED = 120;                // pixels/sec (slower than snakes)
+export const BOID_TURN_RATE = 4.0;            // radians/sec
+export const BOID_RADIUS = 5;                 // collision radius
+export const BOID_SEPARATION_RADIUS = 30;     // pixels
+export const BOID_ALIGNMENT_RADIUS = 60;      // pixels
+export const BOID_COHESION_RADIUS = 80;       // pixels
+export const BOID_SEPARATION_WEIGHT = 1.8;
+export const BOID_ALIGNMENT_WEIGHT = 1.0;
+export const BOID_COHESION_WEIGHT = 1.0;
+export const BOID_FEAR_RADIUS = 150;          // flee from snake heads
+export const BOID_FEAR_WEIGHT = 2.5;
+export const BOID_FOLLOW_RADIUS = 200;        // follow swarm leader
+export const BOID_FOLLOW_WEIGHT = 2.0;
+export const BOID_WALL_MARGIN = 40;           // turn away from walls
+export const BOID_REVEAL_RADIUS = 8;          // small reveal brush (half of snake)
+
+// Star powerup
+export const STAR_DURATION = 5_000;           // ms invincibility
+// Swarm leader / predator powerups
+export const SWARM_LEADER_DURATION = 8_000;
+export const PREDATOR_DURATION = 6_000;
+export const PREDATOR_FEAR_RADIUS = 250;      // larger flee zone
+
+// Twitch viewer credit economy
+export const VIEWER_INITIAL_CREDITS = 100;
+export const COST_POWERUP = 30;
+export const COST_OBSTACLE = 20;
+export const COST_HINT = 40;
+export const REWARD_CORRECT_GUESS = 50;

@@ -23,8 +23,12 @@ export class Snake {
   name: string;
   score: number;
   revealScore: number;
+  pairScore: number;
   revealRadius: number;
   ghosting: boolean;
+  starred: boolean;
+  swarmLeader: boolean;
+  predator: boolean;
   turnDirection: -1 | 0 | 1 = 0;
   boosting = false;
 
@@ -43,8 +47,12 @@ export class Snake {
     this.name = name;
     this.score = 0;
     this.revealScore = 0;
+    this.pairScore = 0;
     this.revealRadius = REVEAL_BRUSH_RADIUS;
     this.ghosting = false;
+    this.starred = false;
+    this.swarmLeader = false;
+    this.predator = false;
 
     this.buildInitialPath(spawnPos, spawnAngle);
   }
@@ -153,7 +161,11 @@ export class Snake {
       name: this.name,
       score: this.score,
       revealScore: this.revealScore,
+      pairScore: this.pairScore,
       ghosting: this.ghosting,
+      starred: this.starred,
+      swarmLeader: this.swarmLeader,
+      predator: this.predator,
     };
   }
 
@@ -163,7 +175,11 @@ export class Snake {
 
   resetForRound(): void {
     this.revealScore = 0;
+    this.pairScore = 0;
     this.revealRadius = REVEAL_BRUSH_RADIUS;
+    this.starred = false;
+    this.swarmLeader = false;
+    this.predator = false;
     this.ghosting = false;
     this.speed = SNAKE_SPEED;
   }
@@ -177,6 +193,9 @@ export class Snake {
     this.radius = SNAKE_RADIUS;
     this.revealRadius = REVEAL_BRUSH_RADIUS;
     this.ghosting = false;
+    this.starred = false;
+    this.swarmLeader = false;
+    this.predator = false;
 
     this.buildInitialPath(pos, angle);
   }

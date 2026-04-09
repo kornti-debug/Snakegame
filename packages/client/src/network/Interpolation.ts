@@ -1,5 +1,5 @@
-import type { GameSnapshot } from '@snakegame/shared';
-import { lerpVec, TICK_INTERVAL } from '@snakegame/shared';
+import type { GameSnapshot, BoidState } from '@snakegame/shared';
+import { lerpVec, lerp, TICK_INTERVAL } from '@snakegame/shared';
 
 export class InterpolationBuffer {
   private snapshots: GameSnapshot[] = [];
@@ -38,7 +38,18 @@ export class InterpolationBuffer {
       return { ...currSnake, segments };
     });
 
-    return { ...curr, snakes };
+    // Interpolate boid positions
+    const boids = curr.boids.map((currBoid) => {
+      const prevBoid = prev.boids.find(b => b.id === currBoid.id);
+      if (!prevBoid) return currBoid;
+      return {
+        ...currBoid,
+        x: lerp(prevBoid.x, currBoid.x, t),
+        y: lerp(prevBoid.y, currBoid.y, t),
+      };
+    });
+
+    return { ...curr, snakes, boids };
   }
 
   getLatest(): GameSnapshot | null {

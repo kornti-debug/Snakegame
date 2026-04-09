@@ -2,148 +2,152 @@
 
 ## Overview
 
-The project is a TypeScript monorepo with three packages:
+TypeScript monorepo with three packages:
 
 ```
 packages/
   shared/   ← Pure types, constants, math utils (no runtime deps)
-  server/   ← Authoritative game server (Node.js)
-  client/   ← Browser renderer + input (Vite + Canvas)
+  server/   ← Authoritative game server (Node.js, 30Hz tick)
+  client/   ← Browser renderer + input (Vite + Canvas, 60fps)
 ```
 
-The game server is **authoritative** — all game state (movement, collisions, scoring) is computed server-side. The client only sends input and renders what the server tells it.
+The game server is **authoritative** — all game state is computed server-side. The client only sends input and renders snapshots.
 
 ## System Diagram
 
 ```
-┌─────────────────────────────────────────────────┐
-│                  Game Server                     │
-│                                                  │
-│  GameLoop (30Hz)                                 │
-│    ├── MovementSystem  (update snake positions)  │
-│    ├── CollisionSystem (detect kills)            │
-│    ├── RevealSystem    (track revealed pixels)   │ ← Phase 3
-│    ├── PowerUpSystem   (spawn/apply/expire)      │ ← Phase 4
-│    └── GodModeSystem   (Twitch viewer actions)   │ ← Phase 5
-│                                                  │
-│  SocketManager ←→ socket.io ←→ Browser Client    │
-│  ExternalRouter ←→ REST/WS ←→ Touch Designer    │ ← Phase 5
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                    Game Server                       │
+│                                                      │
+│  GameLoop (30Hz)                                     │
+│    ├── MovementSystem     (snake positions)           │
+│    ├── CollisionSystem    (snake/boid/obstacle kills) │
+│    ├── RevealSystem       (bitmask grid, per-snake)   │
+│    ├── MemoryBoardSystem  (tile capture + matching)   │
+│    ├── BoidSystem         (AI flocking swarm)         │
+│    ├── PowerUpSystem      (6 powerups, plugin-based)  │
+│    └── CreditSystem       (Twitch viewer economy)     │
+│                                                      │
+│  GameRoom ←→ RoundManager (waiting/playing/ended)    │
+│  SocketManager ←→ socket.io ←→ Browser Client        │
+│  ExternalRouter ←→ REST/WS ←→ Touch Designer         │
+└─────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────┐
-│                 Browser Client                   │
-│                                                  │
-│  InputManager                                    │
-│    ├── KeyboardProvider (WASD / Arrows)          │
-│    └── GamepadProvider  (Gamepad API)            │
-│                                                  │
-│  InterpolationBuffer (smooth 60fps from 30Hz)    │
-│                                                  │
-│  Renderer (Canvas layers)                        │
-│    ├── BackgroundLayer  (hidden image)           │ ← Phase 3
-│    ├── RevealLayer      (opaque mask w/ holes)   │ ← Phase 3
-│    ├── GameLayer        (snakes, powerups)        │
-│    └── UILayer          (HUD, scores)            │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                   Browser Client                     │
+│                                                      │
+│  InputManager                                        │
+│    ├── KeyboardProvider (WASD / Arrows)               │
+│    └── GamepadProvider  (Gamepad API)                 │
+│                                                      │
+│  InterpolationBuffer (smooth 60fps from 30Hz)        │
+│                                                      │
+│  Renderer (5 Canvas layers)                          │
+│    ├── BackgroundLayer   (tile images)                │
+│    ├── RevealLayer       (opaque mask w/ holes)       │
+│    ├── TileOverlayLayer  (borders, capture, hints)    │
+│    ├── GameLayer         (snakes, boids, powerups)    │
+│    └── UILayer           (HUD, scores, legend)        │
+└─────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────┐
-│           Touch Designer (External)              │
-│                                                  │
-│  Twitch Chat ←→ Bot                             │
-│  Stream Diffusion ←→ AI Image Generation         │
-│  OBS ←→ Stream Output                           │
-│                                                  │
-│  Connects to Game Server via REST + WebSocket    │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│             Touch Designer (External)                │
+│                                                      │
+│  Twitch Chat ←→ Bot                                 │
+│  Stream Diffusion ←→ AI Image Generation             │
+│  OBS ←→ Stream Output                               │
+│                                                      │
+│  Connects to Game Server via REST + WebSocket        │
+└─────────────────────────────────────────────────────┘
 ```
+
+## Key Systems
+
+### Memory Board System
+Manages the 5x4 tile grid (20 tiles, 10 pairs). Uses a **block-to-tile lookup table** (`Uint8Array`) for O(1) mapping of reveal-grid blocks to tiles. Tracks per-tile per-snake reveal counts, detects captures at 90% threshold, and checks pair matching (same-snake requirement).
+
+### Boid (AI Swarm) System
+Implements Craig Reynolds' flocking algorithm with an **alpha/follower** hierarchy:
+- **Alpha boids**: Wander freely, drive group movement, ignore cohesion
+- **Follower boids**: Follow nearest alpha via attraction + alignment, flock with each other
+- **Snake interaction**: Flee from player snakes, follow Swarm Leader powerup holders
+- Performance: O(n²) naive approach, <0.5ms per tick for 30 boids at 30Hz
+
+### Reveal System
+480x270 block grid (4px per block). Each block stores the snake index that revealed it (not just 0/1). Supports `revealAt(x, y, radius, snakeId)` for boid-driven reveals. Delta compression sends only changed blocks to clients.
+
+### Credit System
+Manages Twitch viewer economy: team auto-assignment (round-robin), credit balance, spending validation. Persists across rounds within a session.
 
 ## Key Design Decisions
 
 ### Server-Authoritative Model
-All game logic runs on the server. The client sends only input (turn direction) and renders the state snapshots it receives. This prevents cheating and keeps all clients in sync.
+All game logic runs on the server. Client sends only input (turn direction) and renders snapshots. Prevents cheating, keeps clients in sync.
 
 ### Tick Rate: 30Hz Server, 60fps Client
-- Server updates game state 30 times per second
-- Client renders at 60fps using `requestAnimationFrame`
-- Client **interpolates** between the two most recent server snapshots for smooth visuals
-- Input is sent only when it changes (not every frame)
+- Server updates 30x/sec, broadcasts snapshots
+- Client interpolates between two most recent snapshots for smooth 60fps
+- Boid positions also interpolated for fluid movement
 
-### Multiple Local Players Per Socket
-Since this is an exhibition setup, multiple players share one browser. A single socket.io connection handles all local players, with each input event tagged by `playerIndex`.
+### 5-Layer Canvas Rendering
+Separate offscreen canvases composited each frame:
+1. **BackgroundLayer**: Tile images, drawn once per round
+2. **RevealLayer**: Opaque mask, holes via `destination-out` compositing
+3. **TileOverlayLayer**: Tile borders, capture states, hint animations
+4. **GameLayer**: Snakes, boids, powerups, obstacles — redrawn every frame
+5. **UILayer**: HUD, pair scores, match counter, powerup legend
 
-### Canvas Layer Stack (Phase 3)
-Four separate `<canvas>` elements stacked via CSS, rather than one canvas:
-- **BackgroundLayer**: Hidden image, drawn once per round
-- **RevealLayer**: Opaque mask, holes punched via `globalCompositeOperation: 'destination-out'`
-- **GameLayer**: Snakes/powerups, cleared + redrawn every frame at 60fps
-- **UILayer**: HUD, only redrawn on data change
-
-This avoids redrawing the mask and background every frame.
-
-### Plugin-Based Power-Ups (Phase 4)
-Power-ups are registered via a `PowerUpRegistry`:
+### Plugin-Based Power-Ups
+Each powerup is a separate file implementing `PowerUpDefinition`:
 ```typescript
-registry.register({
-  id: 'speed-boost',
-  spawnWeight: 10,
-  duration: 5000,
-  onApply(snake, game) { snake.speed *= 1.5; },
-  onExpire(snake, game) { snake.speed /= 1.5; },
-  renderHint: { color: '#ffaa00', icon: 'bolt', shape: 'circle' },
-});
+{ id, displayName, spawnWeight, duration, onApply(snake), onExpire(snake), renderHint }
 ```
-New power-ups = new file + one `register()` call. No existing code changes needed.
+Registration: one `registry.register()` call in PowerUpSystem constructor.
 
-### Input Provider Pattern
-All input devices implement `InputProvider`:
-```typescript
-interface InputProvider {
-  id: string;
-  type: string;
-  isConnected(): boolean;
-  poll(): InputState;  // { turnDirection: -1|0|1, boost: boolean }
-  destroy(): void;
-}
-```
-Adding a new input device (MIDI controller, dance pad, etc.) = implement this interface.
-
-### External API for Touch Designer (Phase 5)
-The game exposes:
-- **REST API** (`/api/external/`) — for commands and state polling
-- **WebSocket namespace** (`/touchdesigner`) — for real-time events
-
-This keeps the game engine independent from Twitch/AI concerns. Touch Designer is the bridge.
+### External API for Touch Designer
+- **REST API** (`/api/external/`) — state queries, tile management, viewer actions, god mode
+- **WebSocket namespace** (`/touchdesigner`) — real-time events (round lifecycle, captures, matches)
 
 ## Data Flow
 
-### Input → Server → Render
+### Input → Render
 ```
 KeyPress → KeyboardProvider.poll() → InputManager
   → socket.emit('input:turn', playerIndex, direction)
   → Server: snake.turnDirection = direction
-  → Server: MovementSystem.update() moves snake
-  → Server: snapshot broadcast at 30Hz
+  → Server tick: Movement → Collision → Reveal → MemoryBoard → Boids → PowerUps
+  → Server: broadcast snapshot at 30Hz
   → Client: InterpolationBuffer.push(snapshot)
   → Client: requestAnimationFrame → interpolate → Renderer.render()
 ```
 
-### Image Reveal (Phase 3)
+### Memory Card Flow
 ```
-Server: RevealSystem tracks bitmask grid (4x4px blocks)
-  → Snake head moves → mark blocks as revealed
-  → Send delta (newly revealed blocks) to client
-Client: RevealLayer punches holes in opaque mask
-  → Background image shows through
-Server: Calculates reveal % → available via API for Touch Designer
+Round start → MemoryBoardSystem.generateBoard(symbols)
+  → Tiles placed in 5x4 grid, block-to-tile lookup built
+  → Client loads tile images at grid positions
+Each tick:
+  → RevealSystem marks blocks, MemoryBoard attributes to tiles/snakes
+  → Tile at 90%+ → captured by top-contributing snake
+  → Both tiles of pair captured by same snake → pair matched, +1 point
+  → All 10 pairs matched → round ends early
 ```
 
-## Implementation Phases
+## Implementation Status
 
-| Phase | What                    | Status  |
-|-------|------------------------|---------|
-| 1     | Movement + Rendering   | Done    |
-| 2     | Collisions + Gamepad   | Done    |
-| 3     | Image Reveal Mechanic  | Planned |
-| 4     | Power-Up System        | Planned |
-| 5     | External API (Touch Designer) | Planned |
-| 6     | Polish + Exhibition    | Planned |
+| Feature | Status |
+|---------|--------|
+| Snake movement + smooth curves | Done |
+| Collision (snake/wall/self/obstacle/boid) | Done |
+| Image reveal (bitmask grid) | Done |
+| Memory card game (tiles, capture, matching) | Done |
+| AI boid swarm (flocking, alpha/follower) | Done |
+| 6 power-ups (speed, wide, ghost, star, swarm, predator) | Done |
+| 5-layer canvas rendering | Done |
+| Lobby/menu system | Done |
+| External REST API + WebSocket | Done |
+| Twitch credit economy (join, spend, earn) | Done |
+| Hint system (highlight matching pairs) | Done |
+| Touch Designer integration testing | Pending |
+| Visual polish + animations | In Progress |
+| Sound effects | Planned |

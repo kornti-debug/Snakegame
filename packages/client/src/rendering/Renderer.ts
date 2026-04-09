@@ -1,7 +1,8 @@
-import type { GameSnapshot, RevealDelta } from '@snakegame/shared';
+import type { GameSnapshot, RevealDelta, MemoryTile } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
 import { BackgroundLayer } from './layers/BackgroundLayer.js';
 import { RevealLayer } from './layers/RevealLayer.js';
+import { TileOverlayLayer } from './layers/TileOverlayLayer.js';
 import { GameLayer } from './layers/GameLayer.js';
 import { UILayer } from './layers/UILayer.js';
 
@@ -11,6 +12,7 @@ export class Renderer {
 
   private backgroundLayer: BackgroundLayer;
   private revealLayer: RevealLayer;
+  private tileOverlayLayer: TileOverlayLayer;
   private gameLayer: GameLayer;
   private uiLayer: UILayer;
 
@@ -21,12 +23,17 @@ export class Renderer {
     // Create offscreen layers
     this.backgroundLayer = new BackgroundLayer();
     this.revealLayer = new RevealLayer();
+    this.tileOverlayLayer = new TileOverlayLayer();
     this.gameLayer = new GameLayer();
     this.uiLayer = new UILayer();
   }
 
   applyRevealDelta(delta: RevealDelta): void {
     this.revealLayer.applyDelta(delta);
+  }
+
+  async loadTileImages(tiles: MemoryTile[]): Promise<void> {
+    await this.backgroundLayer.loadTileImages(tiles);
   }
 
   async loadImage(url: string): Promise<void> {
@@ -48,17 +55,24 @@ export class Renderer {
     // Clear main canvas
     ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
-    // Layer 1: Background image (hidden picture)
+    // Layer 1: Background (tile images)
     ctx.drawImage(this.backgroundLayer.canvas, 0, 0);
 
-    // Layer 2: Reveal mask (covers the image, holes show through)
+    // Layer 2: Reveal mask (covers tiles, holes show through)
     ctx.drawImage(this.revealLayer.canvas, 0, 0);
 
-    // Layer 3: Game objects (snakes, powerups)
+    // Layer 3: Tile overlay (borders, capture states, hints)
+    // Update snake color cache from snapshot
+    const colorMap = new Map(snapshot.snakes.map(s => [s.id, s.color]));
+    this.tileOverlayLayer.setSnakeColors(colorMap);
+    this.tileOverlayLayer.render(snapshot.memoryBoard, snapshot.hints);
+    ctx.drawImage(this.tileOverlayLayer.canvas, 0, 0);
+
+    // Layer 4: Game objects (snakes, powerups, obstacles)
     this.gameLayer.render(snapshot);
     ctx.drawImage(this.gameLayer.canvas, 0, 0);
 
-    // Layer 4: UI (HUD, scores)
+    // Layer 5: UI (HUD, scores)
     this.uiLayer.render(snapshot);
     ctx.drawImage(this.uiLayer.canvas, 0, 0);
   }

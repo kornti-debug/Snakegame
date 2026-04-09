@@ -99,11 +99,8 @@ export class SocketManager {
       });
 
       socket.on('command:guess', ({ viewerName, guess }) => {
-        const correct = this.room.imageManager.checkGuess(guess);
-        if (correct) {
-          this.room.handleCorrectGuess(viewerName ?? 'anonymous');
-        }
-        socket.emit('guess-result' as any, { correct, viewerName, guess });
+        const result = this.room.handleViewerGuess(viewerName ?? 'anonymous', guess);
+        socket.emit('guess-result' as any, { correct: result.correct, viewerName, guess });
       });
 
       socket.on('command:god-obstacle', ({ cell, durationMs }) => {
@@ -132,11 +129,13 @@ export class SocketManager {
       if (event.type === 'round-start') {
         this.io.emit('game:round-start', {
           roundNumber: event.roundNumber,
-          imageUrl: event.imageUrl,
+          imageUrl: '', // no single image in memory mode
+          tiles: event.tiles,
         });
         this.tdNamespace.emit('event:round-start', {
           roundNumber: event.roundNumber,
-          word: event.word,
+          word: '', // memory mode doesn't use single word
+          tiles: event.tiles,
         });
         this.lastRevealMilestone = 0;
       } else if (event.type === 'round-end') {
@@ -144,14 +143,46 @@ export class SocketManager {
           roundNumber: event.roundNumber,
           winner: event.winner,
           scores: event.scores,
+          pairScores: event.pairScores,
         });
         this.tdNamespace.emit('event:round-end', {
           roundNumber: event.roundNumber,
           winner: event.winner,
           scores: event.scores,
+          pairScores: event.pairScores,
+        });
+      } else if (event.type === 'tile-captured') {
+        this.io.emit('game:tile-captured', {
+          tileId: event.tileId,
+          capturedBy: event.capturedBy,
+          capturedColor: event.capturedColor,
+          symbolName: event.symbolName,
+        });
+        this.tdNamespace.emit('event:tile-captured' as any, {
+          tileId: event.tileId,
+          capturedBy: event.capturedBy,
+          symbolName: event.symbolName,
+        });
+      } else if (event.type === 'pair-matched') {
+        this.io.emit('game:pair-matched', {
+          pairId: event.pairId,
+          symbolName: event.symbolName,
+          matchedBy: event.matchedBy,
+          matchedByColor: event.matchedByColor,
+        });
+        this.tdNamespace.emit('event:pair-matched' as any, {
+          pairId: event.pairId,
+          symbolName: event.symbolName,
+          matchedBy: event.matchedBy,
+        });
+      } else if (event.type === 'hint-active') {
+        this.io.emit('game:hint-active', {
+          pairId: event.pairId,
+          symbolName: event.symbolName,
+          tileIds: event.tileIds,
         });
       } else if (event.type === 'guess-correct') {
-        this.tdNamespace.emit('event:guess-correct', {
+        this.tdNamespace.emit('event:guess-correct' as any, {
           viewerName: event.viewerName,
           word: event.word,
         });
@@ -172,7 +203,7 @@ export class SocketManager {
       const milestones = [25, 50, 75, 90];
       for (const m of milestones) {
         if (pct >= m && this.lastRevealMilestone < m) {
-          this.tdNamespace.emit('event:reveal-milestone', { percentage: m });
+          this.tdNamespace.emit('event:reveal-milestone' as any, { percentage: m });
           this.lastRevealMilestone = m;
         }
       }

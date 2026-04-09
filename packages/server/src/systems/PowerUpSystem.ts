@@ -4,6 +4,9 @@ import { PowerUpRegistry } from '../powerups/PowerUpRegistry.js';
 import { SpeedBoost } from '../powerups/SpeedBoost.js';
 import { WideTrail } from '../powerups/WideTrail.js';
 import { Ghost } from '../powerups/Ghost.js';
+import { Star } from '../powerups/Star.js';
+import { SwarmLeader } from '../powerups/SwarmLeader.js';
+import { Predator } from '../powerups/Predator.js';
 import {
   ARENA_WIDTH,
   ARENA_HEIGHT,
@@ -29,6 +32,9 @@ export class PowerUpSystem {
     this.registry.register(SpeedBoost);
     this.registry.register(WideTrail);
     this.registry.register(Ghost);
+    this.registry.register(Star);
+    this.registry.register(SwarmLeader);
+    this.registry.register(Predator);
   }
 
   update(snakes: Snake[], dt: number): void {

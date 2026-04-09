@@ -15,7 +15,11 @@ export interface SnakeState {
   name: string;
   score: number;
   revealScore: number;
+  pairScore: number;
   ghosting: boolean;
+  starred: boolean;           // star powerup — invincible + kills on touch
+  swarmLeader: boolean;       // boids follow this snake
+  predator: boolean;          // boids flee with larger radius
 }
 
 export interface RevealDelta {
@@ -31,6 +35,7 @@ export interface RoundState {
   roundNumber: number;
   timeRemainingMs: number;
   revealScores: Record<string, number>;
+  pairScores: Record<string, number>;
 }
 
 export interface PowerUpState {
@@ -64,10 +69,67 @@ export interface GameSnapshot {
   round: RoundState;
   powerUps: PowerUpState[];
   obstacles: ObstacleState[];
+  boids: BoidState[];
   lobbyPlayers: LobbyPlayer[];
+  memoryBoard: MemoryBoardState;
+  hints: HintState[];
+}
+
+export interface BoidState {
+  id: number;
+  x: number;
+  y: number;
+  angle: number;              // heading in radians
+  speed: number;
+  leaderId: string | null;    // snakeId of swarm leader (null = wild)
 }
 
 export interface ArenaConfig {
   width: number;
   height: number;
+}
+
+// --- Memory Card Game Types ---
+
+export interface MemoryTile {
+  tileId: number;           // 0..19
+  pairId: number;           // 0..9 (two tiles share a pairId)
+  symbolName: string;       // e.g. "star", "heart" — for guessing/hints
+  imageUrl: string;         // tile image URL or data URI
+  x: number;                // pixel position (top-left)
+  y: number;
+  width: number;            // 240
+  height: number;           // 240
+  revealPercent: number;    // 0..100
+  capturedBy: string | null;   // snakeId who revealed the most (>= 90%)
+  capturedColor: string | null;
+  revealBySnake: Record<string, number>; // snakeId → block count within this tile
+}
+
+export interface MemoryPair {
+  pairId: number;
+  symbolName: string;
+  tileIds: [number, number];
+  matched: boolean;            // true when both tiles captured by same snake
+  matchedBy: string | null;    // snakeId that matched the pair
+}
+
+export interface MemoryBoardState {
+  tiles: MemoryTile[];
+  pairs: MemoryPair[];
+  pairScores: Record<string, number>; // snakeId → completed pairs count
+}
+
+export interface TwitchViewer {
+  viewerName: string;
+  teamSnakeId: string;
+  teamColor: string;
+  credits: number;
+}
+
+export interface HintState {
+  pairId: number;
+  symbolName: string;
+  tileIds: [number, number];
+  expiresAtMs: number;         // server timestamp when hint expires
 }

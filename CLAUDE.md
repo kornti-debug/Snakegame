@@ -37,31 +37,35 @@ npm run dev:client
 
 ## What's Implemented
 - Snake movement with continuous smooth curves (angle + turn rate)
-- Collision system (snake-vs-snake, snake-vs-wall, self-collision, snake-vs-obstacle)
-- Ghost mode (pass through snakes, semi-transparent rendering)
+- Collision system (snake-vs-snake, snake-vs-wall, self-collision, snake-vs-obstacle, snake-vs-boid)
+- Ghost mode (pass through snakes/boids, semi-transparent rendering)
 - Auto-respawn after 2 seconds
 - Keyboard input (WASD + Arrows for 2 players)
 - Gamepad input provider (ready, not actively used yet)
 - Canvas rendering with bezier curve snakes + eyes
-- 4-canvas layer stack (background image, reveal mask, game objects, UI)
-- Image reveal mechanic (bitmask grid, destination-out compositing)
-- Per-snake reveal tracking and scoring
-- Round management (waiting → playing → ended → repeat, 90s rounds)
-- Power-up system: SpeedBoost, WideTrail, Ghost (plugin registry pattern)
-- HUD with round timer, reveal scores, winner overlay
-- State interpolation (30Hz server → 60fps client)
+- 5-canvas layer stack (background tiles, reveal mask, tile overlay, game objects, UI)
+- **Memory card game** mechanic (20 tiles, 10 pairs, 90% capture threshold, same-snake matching)
+- Per-snake per-tile reveal tracking with visual breakdown bars
+- Round management (waiting → playing → ended → repeat, 120s rounds)
+- Power-up system: SpeedBoost, WideTrail, Ghost, Star, SwarmLeader, Predator (plugin registry)
+- **AI boid swarm** system (flocking with alpha/follower hierarchy, flee/follow behaviors)
+- HUD with round timer, pair scores, match counter, powerup legend, winner overlay
+- State interpolation (30Hz server → 60fps client, includes boid interpolation)
 - Graceful server shutdown (Ctrl+C)
 - Obstacle entity (for God Mode / external API)
 - Lobby/menu system (player join, color selection, start game)
 - **External REST API** (`/api/external/*`) for Touch Designer integration
 - **WebSocket namespace** (`/touchdesigner`) for real-time TD events
-- Image management (push image + word, guess checking)
+- Tile image management (built-in SVG defaults + TD override via API)
+- **Twitch viewer credit economy** (join, team assignment, spend on powerups/obstacles/hints, earn by guessing)
+- Hint system (pulsing gold border highlights matching tile pairs)
 - Grid coordinate system (A1-P9, 16x9 cells)
 - God Mode actions via API (place obstacles, spawn power-ups)
 
 ## What's Planned
-- Phase 6: Polish — visual effects, death animations, sound
 - Touch Designer integration testing
+- Visual polish — capture/match animations, death effects
+- Sound effects
 - Stream overlay data
 
 ## External API (Touch Designer)
@@ -70,11 +74,16 @@ npm run dev:client
 
 | Method | Endpoint | Body | Purpose |
 |--------|----------|------|---------|
-| GET | `/state` | — | Full game state summary |
+| GET | `/state` | — | Full game state (incl. memory board, hints) |
 | GET | `/reveal-percentage` | — | Current reveal % |
-| POST | `/image` | `{ imageUrl, word, imageBase64? }` | Queue image for next round |
-| GET | `/image` | — | Current image state |
-| POST | `/guess` | `{ viewerName, guess }` | Submit Twitch viewer guess |
+| GET | `/memory/board` | — | Memory board state (tiles, pairs, scores) |
+| POST | `/tiles` | `{ tiles: [{ symbolName, imageUrl?, imageBase64? }] }` | Set custom tile images |
+| POST | `/image` | `{ imageUrl, word, imageBase64? }` | Legacy: queue single image |
+| POST | `/guess` | `{ viewerName, guess }` | Guess a symbol name |
+| POST | `/viewer/join` | `{ viewerName }` | Register viewer, auto-assign team |
+| POST | `/viewer/action` | `{ viewerName, action, params }` | Spend credits (hint/powerup/obstacle) |
+| POST | `/viewer/guess` | `{ viewerName, symbolName }` | Guess symbol for credits |
+| GET | `/viewer/:name` | — | Get viewer state (credits, team) |
 | POST | `/god/obstacle` | `{ cell: "D5", durationMs? }` | Place obstacle at grid cell |
 | POST | `/god/powerup` | `{ cell: "H3", type }` | Spawn power-up at grid cell |
 | POST | `/round/start` | — | Force start round/game |
@@ -84,9 +93,10 @@ npm run dev:client
 Auth: `{ auth: { apiKey: "your-key" } }` (set `API_KEY` env var on server)
 
 **Server → TD events:**
-- `event:round-start` → `{ roundNumber, word }`
-- `event:round-end` → `{ roundNumber, winner, scores }`
-- `event:guess-correct` → `{ viewerName, word }`
+- `event:round-start` → `{ roundNumber, tiles }`
+- `event:round-end` → `{ roundNumber, winner, scores, pairScores }`
+- `event:tile-captured` → `{ tileId, capturedBy, symbolName }`
+- `event:pair-matched` → `{ pairId, symbolName, matchedBy }`
 - `event:reveal-milestone` → `{ percentage }` (at 25/50/75/90%)
 
 **TD → Server commands:**
@@ -97,3 +107,6 @@ Auth: `{ auth: { apiKey: "your-key" } }` (set `API_KEY` env var on server)
 
 ### Grid System
 Arena (1920x1080) divided into 16×9 cells (120×120px each). Columns A-P, rows 1-9. Example: `D5` = center of column D, row 5 = pixel (420, 540).
+
+### Memory Tile Grid
+5×4 tile grid (240×240px tiles, 8px gaps) centered in arena. Tiles use built-in SVG symbols by default. Override via `POST /tiles`.

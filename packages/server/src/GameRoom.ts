@@ -1,5 +1,5 @@
 import type { GameSnapshot, GamePhase, LobbyPlayer, Vector2D } from '@snakegame/shared';
-import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS } from '@snakegame/shared';
+import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS, COST_POWERUP, COST_OBSTACLE, COST_HINT, REWARD_CORRECT_GUESS, BOID_REVEAL_RADIUS, cellToPixel, isValidCell } from '@snakegame/shared';
 import { Snake } from './entities/Snake.js';
 import { Obstacle } from './entities/Obstacle.js';
 import { PowerUp } from './entities/PowerUp.js';
@@ -7,8 +7,12 @@ import { MovementSystem } from './systems/MovementSystem.js';
 import { CollisionSystem } from './systems/CollisionSystem.js';
 import { RevealSystem } from './systems/RevealSystem.js';
 import { PowerUpSystem } from './systems/PowerUpSystem.js';
+import { MemoryBoardSystem } from './systems/MemoryBoardSystem.js';
+import { BoidSystem } from './systems/BoidSystem.js';
+import { CreditSystem } from './systems/CreditSystem.js';
 import { RoundManager } from './RoundManager.js';
 import { ImageManager } from './api/ImageManager.js';
+import { getDefaultSymbols, type SymbolDef } from './systems/SymbolGenerator.js';
 
 export class GameRoom {
   gamePhase: GamePhase = 'lobby';
@@ -23,10 +27,16 @@ export class GameRoom {
   private collisionSystem = new CollisionSystem();
   readonly revealSystem = new RevealSystem();
   readonly powerUpSystem = new PowerUpSystem();
+  readonly memoryBoardSystem = new MemoryBoardSystem();
+  readonly boidSystem = new BoidSystem();
+  readonly creditSystem = new CreditSystem();
   readonly roundManager = new RoundManager();
   readonly imageManager: ImageManager;
   obstacles: Obstacle[] = [];
   private respawnTimers = new Map<string, number>();
+
+  // Custom tile symbols from TD (null = use defaults)
+  private customSymbols: SymbolDef[] | null = null;
 
   pendingEvents: GameEvent[] = [];
 
@@ -105,6 +115,13 @@ export class GameRoom {
     this.powerUpSystem.reset();
     this.obstacles = [];
     this.respawnTimers.clear();
+
+    // Initialize credit system with snake roster
+    const snakes = this.getAllSnakes();
+    const snakeIds = snakes.map(s => s.id);
+    const snakeColors = new Map(snakes.map(s => [s.id, s.color]));
+    this.creditSystem.resetTeamCounts(snakeIds);
+    this.creditSystem.updateSnakeColors(snakeColors);
   }
 
   returnToLobby(): void {
@@ -160,21 +177,22 @@ export class GameRoom {
 
     if (phaseChange === 'playing') {
       this.resetForNewRound(snakes);
-      const { imageUrl, word } = this.imageManager.startRound();
+      const symbols = this.customSymbols ?? getDefaultSymbols();
+      this.memoryBoardSystem.generateBoard(symbols);
+
       this.pendingEvents.push({
         type: 'round-start',
         roundNumber: this.roundManager.roundNumber,
-        imageUrl,
-        word,
+        tiles: this.memoryBoardSystem.getTiles(),
       });
     }
 
     if (phaseChange === 'ended') {
-      const revealScores = this.revealSystem.getRevealScores();
+      const pairScores = this.memoryBoardSystem.getPairScores();
       let winner: { id: string; name: string; score: number } | null = null;
       let maxScore = 0;
       for (const snake of snakes) {
-        const score = revealScores[snake.id] ?? 0;
+        const score = pairScores[snake.id] ?? 0;
         if (score > maxScore) {
           maxScore = score;
           winner = { id: snake.id, name: snake.name, score };
@@ -184,7 +202,8 @@ export class GameRoom {
         type: 'round-end',
         roundNumber: this.roundManager.roundNumber,
         winner,
-        scores: revealScores,
+        scores: this.revealSystem.getRevealScores(),
+        pairScores,
       });
     }
 
@@ -205,8 +224,56 @@ export class GameRoom {
 
       this.movementSystem.update(snakes, dt);
       this.collisionSystem.update(snakes, this.obstacles);
-      this.revealSystem.update(snakes);
       this.powerUpSystem.update(snakes, dt);
+
+      // Boid AI swarm update
+      this.boidSystem.update(dt, snakes);
+
+      // Boid-snake collision: boids kill snakes on touch (unless starred/ghosting)
+      for (const snake of snakes) {
+        if (this.boidSystem.checkSnakeBoidCollision(snake)) {
+          snake.kill();
+        }
+      }
+
+      // Reveal system: snake heads + boid reveals (all in one pass)
+      this.revealSystem.update(snakes);
+
+      // Boid reveals: boids following a swarm leader reveal for that leader's team
+      for (const boid of this.boidSystem.getRevealableBoids()) {
+        if (boid.leaderId) {
+          this.revealSystem.revealAt(boid.x, boid.y, BOID_REVEAL_RADIUS, boid.leaderId);
+        }
+      }
+
+      // Memory board: process ALL reveals once (snake + boid), check captures/matches
+      this.memoryBoardSystem.update(this.revealSystem, snakes);
+
+      // Convert memory board events to game events
+      for (const evt of this.memoryBoardSystem.flushEvents()) {
+        if (evt.type === 'tile-captured') {
+          this.pendingEvents.push({
+            type: 'tile-captured',
+            tileId: evt.tileId!,
+            symbolName: evt.symbolName,
+            capturedBy: evt.snakeId,
+            capturedColor: evt.snakeColor,
+          });
+        } else if (evt.type === 'pair-matched') {
+          this.pendingEvents.push({
+            type: 'pair-matched',
+            pairId: evt.pairId!,
+            symbolName: evt.symbolName,
+            matchedBy: evt.snakeId,
+            matchedByColor: evt.snakeColor,
+          });
+        }
+      }
+
+      // Check if all pairs matched → end round early
+      if (this.memoryBoardSystem.isRoundComplete()) {
+        this.roundManager.forceEndRound();
+      }
 
       const dtMs = dt * 1000;
       for (const obstacle of this.obstacles) {
@@ -226,19 +293,20 @@ export class GameRoom {
     const isFirstRound = this.roundManager.roundNumber === 1;
 
     this.revealSystem.reset();
+    this.revealSystem.setSnakeIndexMap(snakes);
     this.powerUpSystem.expireAll(snakes);
     this.powerUpSystem.reset();
+    this.boidSystem.reset();
+    this.boidSystem.spawnInitial();
     this.obstacles = [];
     this.respawnTimers.clear();
 
     for (const snake of snakes) {
       snake.resetForRound();
       if (!isFirstRound) {
-        // Subsequent rounds: respawn at new positions
         const { pos, angle } = this.getSpawnPoint();
         snake.respawn(pos, angle);
       } else {
-        // First round: keep positions from countdown, just ensure alive
         snake.alive = true;
       }
     }
@@ -247,6 +315,7 @@ export class GameRoom {
   getSnapshot(): GameSnapshot {
     const snakes = this.getAllSnakes();
     const revealScores = this.revealSystem.getRevealScores();
+    const pairScores = this.memoryBoardSystem.getPairScores();
 
     return {
       tick: this.tick,
@@ -255,10 +324,13 @@ export class GameRoom {
       snakes: snakes.map(s => s.toState()),
       arena: { width: ARENA_WIDTH, height: ARENA_HEIGHT },
       revealPercentage: this.revealSystem.getRevealPercentage(),
-      round: this.roundManager.getRoundState(revealScores),
+      round: this.roundManager.getRoundState(revealScores, pairScores),
       powerUps: this.powerUpSystem.getFieldPowerUps().map(p => p.toState()),
       obstacles: this.obstacles.map(o => o.toState()),
+      boids: this.boidSystem.getBoidStates(),
       lobbyPlayers: this.getLobbyPlayers(),
+      memoryBoard: this.memoryBoardSystem.getBoardState(),
+      hints: this.memoryBoardSystem.getHints(),
     };
   }
 
@@ -274,12 +346,77 @@ export class GameRoom {
     return true;
   }
 
+  /** Set custom tile symbols from Touch Designer */
+  setCustomSymbols(symbols: SymbolDef[]): void {
+    this.customSymbols = symbols;
+  }
+
+  /** Handle viewer symbol guess (for credit economy) */
+  handleViewerGuess(viewerName: string, symbolName: string): { correct: boolean; creditsEarned: number } {
+    const guessable = this.memoryBoardSystem.getGuessableSymbols();
+    const correct = guessable.some(s => s.toLowerCase() === symbolName.trim().toLowerCase());
+    let creditsEarned = 0;
+    if (correct) {
+      creditsEarned = REWARD_CORRECT_GUESS;
+      this.creditSystem.earnCredits(viewerName, creditsEarned);
+    }
+    return { correct, creditsEarned };
+  }
+
+  /** Handle viewer hint request */
+  handleHint(viewerName: string, symbolName: string): { ok: boolean; reason?: string } {
+    if (!this.creditSystem.spendCredits(viewerName, COST_HINT)) {
+      return { ok: false, reason: 'Insufficient credits' };
+    }
+    const activated = this.memoryBoardSystem.activateHint(symbolName);
+    if (!activated) {
+      // Refund
+      this.creditSystem.earnCredits(viewerName, COST_HINT);
+      return { ok: false, reason: 'Symbol not found or already matched/hinted' };
+    }
+    const pair = this.memoryBoardSystem.getBoardState().pairs.find(
+      p => p.symbolName.toLowerCase() === symbolName.toLowerCase()
+    );
+    if (pair) {
+      this.pendingEvents.push({
+        type: 'hint-active',
+        pairId: pair.pairId,
+        symbolName: pair.symbolName,
+        tileIds: pair.tileIds,
+      });
+    }
+    return { ok: true };
+  }
+
+  /** Handle viewer powerup placement */
+  handleViewerPowerUp(viewerName: string, cell: string, type: string): boolean {
+    if (!this.creditSystem.spendCredits(viewerName, COST_POWERUP)) return false;
+    if (!isValidCell(cell)) {
+      this.creditSystem.earnCredits(viewerName, COST_POWERUP);
+      return false;
+    }
+    const pos = cellToPixel(cell)!;
+    return this.spawnPowerUpAt(type, pos);
+  }
+
+  /** Handle viewer obstacle placement */
+  handleViewerObstacle(viewerName: string, cell: string, durationMs?: number): boolean {
+    if (!this.creditSystem.spendCredits(viewerName, COST_OBSTACLE)) return false;
+    if (!isValidCell(cell)) {
+      this.creditSystem.earnCredits(viewerName, COST_OBSTACLE);
+      return false;
+    }
+    const pos = cellToPixel(cell)!;
+    this.addObstacle(pos.x - 40, pos.y - 10, 80, 20, durationMs ?? 15000);
+    return true;
+  }
+
   handleCorrectGuess(viewerName: string): void {
     if (this.roundManager.phase !== 'playing') return;
     this.pendingEvents.push({
       type: 'guess-correct',
       viewerName,
-      word: this.imageManager.currentWord ?? '',
+      word: '',
     });
     this.roundManager.forceEndRound();
   }
@@ -301,6 +438,9 @@ export class GameRoom {
 }
 
 export type GameEvent =
-  | { type: 'round-start'; roundNumber: number; imageUrl: string; word: string }
-  | { type: 'round-end'; roundNumber: number; winner: { id: string; name: string; score: number } | null; scores: Record<string, number> }
+  | { type: 'round-start'; roundNumber: number; tiles: import('@snakegame/shared').MemoryTile[] }
+  | { type: 'round-end'; roundNumber: number; winner: { id: string; name: string; score: number } | null; scores: Record<string, number>; pairScores: Record<string, number> }
+  | { type: 'tile-captured'; tileId: number; symbolName: string; capturedBy: string; capturedColor: string }
+  | { type: 'pair-matched'; pairId: number; symbolName: string; matchedBy: string; matchedByColor: string }
+  | { type: 'hint-active'; pairId: number; symbolName: string; tileIds: [number, number] }
   | { type: 'guess-correct'; viewerName: string; word: string };
