@@ -29,6 +29,7 @@ export class Snake {
   starred: boolean;
   swarmLeader: boolean;
   predator: boolean;
+  effectDrain: Record<string, number> = {};
   turnDirection: -1 | 0 | 1 = 0;
   boosting = false;
 
@@ -166,6 +167,7 @@ export class Snake {
       starred: this.starred,
       swarmLeader: this.swarmLeader,
       predator: this.predator,
+      effectDrain: this.effectDrain,
     };
   }
 

@@ -317,6 +317,11 @@ export class GameRoom {
     const revealScores = this.revealSystem.getRevealScores();
     const pairScores = this.memoryBoardSystem.getPairScores();
 
+    // Update effect drain info on each snake before serializing
+    for (const snake of snakes) {
+      snake.effectDrain = this.powerUpSystem.getEffectDrains(snake.id);
+    }
+
     return {
       tick: this.tick,
       timestamp: Date.now(),

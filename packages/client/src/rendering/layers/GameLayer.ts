@@ -2,10 +2,17 @@ import type { GameSnapshot, PowerUpState, ObstacleState, BoidState } from '@snak
 import { ARENA_WIDTH, ARENA_HEIGHT, BOID_RADIUS } from '@snakegame/shared';
 import { drawSnake } from '../SnakeRenderer.js';
 
+const BOID_TRAIL_LENGTH = 5;    // segments per mini snake
+const BOID_SEGMENT_SPACING = 6; // px between segments
+const BOID_BODY_WIDTH = 4;      // line width for mini snake body
+
 export class GameLayer {
   readonly canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private pulseTime = 0;
+
+  // Trail history per boid: maps boid id → array of past positions
+  private boidTrails = new Map<number, { x: number; y: number }[]>();
 
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -36,9 +43,10 @@ export class GameLayer {
       this.drawPowerUp(ctx, powerUp);
     }
 
-    // Boids (AI swarm)
+    // Boids (AI swarm) — update trails and render as mini snakes
+    this.updateBoidTrails(snapshot.boids);
     for (const boid of snapshot.boids) {
-      this.drawBoid(ctx, boid);
+      this.drawBoidSnake(ctx, boid);
     }
 
     // Snakes
@@ -54,7 +62,7 @@ export class GameLayer {
 
     const iconMap: Record<string, string> = {
       'speed-boost': '⚡', 'wide-trail': '◎', 'ghost': '👻',
-      'star': '⭐', 'swarm-leader': '🐟', 'predator': '🦈',
+      'star': '⭐', 'swarm-leader': '🐟', 'predator': '🦈', 'growth': '🌱',
     };
     const icon = iconMap[pu.type] ?? '?';
 
@@ -69,36 +77,110 @@ export class GameLayer {
     ctx.restore();
   }
 
-  private drawBoid(ctx: CanvasRenderingContext2D, boid: BoidState): void {
-    const { x, y, angle, leaderId } = boid;
-    const r = BOID_RADIUS;
+  /** Update trail history for all boids */
+  private updateBoidTrails(boids: BoidState[]): void {
+    const activeBoidIds = new Set(boids.map(b => b.id));
 
-    // Color: teal-ish for wild, greenish for following a leader
-    const color = leaderId ? '#88FFAA' : '#66CCDD';
+    // Remove trails for dead boids
+    for (const id of this.boidTrails.keys()) {
+      if (!activeBoidIds.has(id)) this.boidTrails.delete(id);
+    }
 
+    // Push new position to front of each trail
+    for (const boid of boids) {
+      let trail = this.boidTrails.get(boid.id);
+      if (!trail) {
+        // Initialize trail behind the boid based on angle
+        trail = [];
+        for (let i = 0; i < BOID_TRAIL_LENGTH; i++) {
+          trail.push({
+            x: boid.x - Math.cos(boid.angle) * i * BOID_SEGMENT_SPACING,
+            y: boid.y - Math.sin(boid.angle) * i * BOID_SEGMENT_SPACING,
+          });
+        }
+        this.boidTrails.set(boid.id, trail);
+      }
+
+      // Prepend current position
+      trail.unshift({ x: boid.x, y: boid.y });
+
+      // Keep trail at fixed length
+      while (trail.length > BOID_TRAIL_LENGTH * 3) {
+        trail.pop();
+      }
+    }
+  }
+
+  /** Render a boid as a mini snake using its trail */
+  private drawBoidSnake(ctx: CanvasRenderingContext2D, boid: BoidState): void {
+    const trail = this.boidTrails.get(boid.id);
+    if (!trail || trail.length < 2) return;
+
+    const color = boid.leaderId ? '#88FFAA' : '#66CCDD';
+
+    // Build segments at even spacing along the trail
+    const segments: { x: number; y: number }[] = [trail[0]];
+    let walked = 0;
+    let nextDist = BOID_SEGMENT_SPACING;
+
+    for (let i = 0; i < trail.length - 1 && segments.length < BOID_TRAIL_LENGTH; i++) {
+      const dx = trail[i + 1].x - trail[i].x;
+      const dy = trail[i + 1].y - trail[i].y;
+      const edgeLen = Math.sqrt(dx * dx + dy * dy);
+      if (edgeLen === 0) continue;
+
+      const edgeStart = walked;
+      const edgeEnd = walked + edgeLen;
+
+      while (nextDist <= edgeEnd && segments.length < BOID_TRAIL_LENGTH) {
+        const t = (nextDist - edgeStart) / edgeLen;
+        segments.push({
+          x: trail[i].x + dx * t,
+          y: trail[i].y + dy * t,
+        });
+        nextDist += BOID_SEGMENT_SPACING;
+      }
+
+      walked = edgeEnd;
+    }
+
+    if (segments.length < 2) return;
+
+    // Draw body as smooth curve (same style as player snakes, but thinner)
     ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-
-    // Fish-like body: pointed triangle
-    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = BOID_BODY_WIDTH;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.globalAlpha = 0.85;
+
     ctx.beginPath();
-    ctx.moveTo(r * 1.8, 0);            // nose
-    ctx.lineTo(-r * 1.2, -r * 1.0);    // top-left
-    ctx.lineTo(-r * 0.5, 0);           // indent
-    ctx.lineTo(-r * 1.2, r * 1.0);     // bottom-left
-    ctx.closePath();
+    ctx.moveTo(segments[0].x, segments[0].y);
+
+    for (let i = 1; i < segments.length - 1; i++) {
+      const midX = (segments[i].x + segments[i + 1].x) / 2;
+      const midY = (segments[i].y + segments[i + 1].y) / 2;
+      ctx.quadraticCurveTo(segments[i].x, segments[i].y, midX, midY);
+    }
+
+    const last = segments[segments.length - 1];
+    ctx.lineTo(last.x, last.y);
+    ctx.stroke();
+
+    // Head: small circle
+    const head = segments[0];
+    const headR = BOID_BODY_WIDTH * 0.8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, headR, 0, Math.PI * 2);
     ctx.fill();
 
-    // Eye
+    // Tiny eye
+    const eyeOffX = Math.cos(boid.angle) * headR * 0.4;
+    const eyeOffY = Math.sin(boid.angle) * headR * 0.4;
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(r * 0.6, -r * 0.2, r * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#111';
-    ctx.beginPath();
-    ctx.arc(r * 0.7, -r * 0.2, r * 0.15, 0, Math.PI * 2);
+    ctx.arc(head.x + eyeOffX, head.y + eyeOffY, headR * 0.35, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.globalAlpha = 1;

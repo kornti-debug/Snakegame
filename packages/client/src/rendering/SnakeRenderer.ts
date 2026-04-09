@@ -1,82 +1,189 @@
 import type { SnakeState } from '@snakegame/shared';
 
-let starTime = 0;
+let animTime = 0;
 
 export function drawSnake(ctx: CanvasRenderingContext2D, snake: SnakeState): void {
   const segments = snake.segments;
   if (segments.length < 2) return;
 
-  starTime += 0.02;
+  animTime += 0.02;
 
-  // Star powerup: rainbow cycling color + glow
-  let bodyColor = snake.color;
-  if (snake.starred) {
-    const hue = (starTime * 200 + snake.segments[0].x) % 360;
-    bodyColor = `hsl(${hue}, 100%, 60%)`;
-    ctx.shadowColor = bodyColor;
-    ctx.shadowBlur = 20;
-  }
+  const baseAlpha = !snake.alive ? 0.3 : 1;
+  const drain = snake.effectDrain ?? {};
 
-  // Draw body as smooth curve
-  ctx.strokeStyle = bodyColor;
-  ctx.lineWidth = snake.radius * 2;
+  // Determine which effect is active and its drain
+  const starDrain = drain['star'] ?? 0;
+  const ghostDrain = drain['ghost'] ?? 0;
+  const predatorDrain = drain['predator'] ?? 0;
+  const swarmDrain = drain['swarm-leader'] ?? 0;
+  const speedDrain = drain['speed-boost'] ?? 0;
+  const wideDrain = drain['wide-trail'] ?? 0;
+
+  // Draw body segment by segment for per-segment coloring
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.globalAlpha = !snake.alive ? 0.3 : snake.ghosting && !snake.starred ? 0.5 : 1;
+  ctx.lineWidth = snake.radius * 2;
 
+  for (let i = 0; i < segments.length - 1; i++) {
+    // How far along the body (0 = head, 1 = tail)
+    const t = i / (segments.length - 1);
+
+    // Compute segment color and alpha based on active effects + drain
+    const { color, alpha, glow } = getSegmentStyle(snake, t, baseAlpha, {
+      starDrain, ghostDrain, predatorDrain, swarmDrain, speedDrain, wideDrain,
+    });
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+
+    if (glow) {
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = 12;
+    }
+
+    // Draw this segment as a line
+    const a = segments[i];
+    const b = segments[i + 1];
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Draw head
+  const headStyle = getSegmentStyle(snake, 0, baseAlpha, {
+    starDrain, ghostDrain, predatorDrain, swarmDrain, speedDrain, wideDrain,
+  });
+  drawHead(ctx, snake, headStyle.color, headStyle.glow);
+
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+}
+
+interface Drains {
+  starDrain: number;
+  ghostDrain: number;
+  predatorDrain: number;
+  swarmDrain: number;
+  speedDrain: number;
+  wideDrain: number;
+}
+
+/**
+ * Per-segment visual style. Drain goes from head (keeps effect longest) to tail (loses first).
+ * At drain=1.0 (full), entire snake has the effect.
+ * At drain=0.5, only the front 50% of segments show the effect.
+ * At drain=0.0, effect is gone.
+ */
+function getSegmentStyle(
+  snake: SnakeState, t: number, baseAlpha: number, drains: Drains,
+): { color: string; alpha: number; glow: string | null } {
+  let color = snake.color;
+  let alpha = baseAlpha;
+  let glow: string | null = null;
+
+  // Star: rainbow cycling, drains tail-to-head
+  if (drains.starDrain > 0) {
+    const effectT = drains.starDrain; // 1 = full, 0 = gone
+    if (t < effectT) {
+      // This segment is still in the effect zone
+      const hue = (animTime * 200 + t * 360 + snake.segments[0].x) % 360;
+      const sat = 100;
+      const light = 55 + (1 - effectT) * 15; // gets slightly dimmer as it drains
+      color = `hsl(${hue}, ${sat}%, ${light}%)`;
+      glow = color;
+    }
+    // Segments beyond effectT keep normal color
+    alpha = baseAlpha;
+  }
+
+  // Ghost: transparency, drains tail-to-head
+  if (drains.ghostDrain > 0) {
+    const effectT = drains.ghostDrain;
+    if (t < effectT) {
+      alpha = baseAlpha * 0.4; // ghosted segments are transparent
+    }
+    // Segments beyond effectT are solid (already normal alpha)
+  }
+
+  // Predator: red tint with angular look, drains tail-to-head
+  if (drains.predatorDrain > 0) {
+    const effectT = drains.predatorDrain;
+    if (t < effectT) {
+      color = blendColors(snake.color, '#FF2244', 0.6);
+      glow = '#FF4466';
+    }
+  }
+
+  // Swarm leader: green glow, drains tail-to-head
+  if (drains.swarmDrain > 0) {
+    const effectT = drains.swarmDrain;
+    if (t < effectT) {
+      color = blendColors(snake.color, '#44FFAA', 0.5);
+      glow = '#44FFAA';
+    }
+  }
+
+  // Speed boost: bright white shimmer, drains tail-to-head
+  if (drains.speedDrain > 0) {
+    const effectT = drains.speedDrain;
+    if (t < effectT) {
+      const shimmer = Math.sin(animTime * 8 + t * 10) * 0.3 + 0.7;
+      color = blendColors(snake.color, '#FFFFFF', shimmer * 0.4);
+    }
+  }
+
+  // Wide trail: golden tint, drains tail-to-head
+  if (drains.wideDrain > 0) {
+    const effectT = drains.wideDrain;
+    if (t < effectT) {
+      color = blendColors(snake.color, '#FFDD44', 0.4);
+      glow = '#FFDD44';
+    }
+  }
+
+  return { color, alpha, glow };
+}
+
+function drawHead(ctx: CanvasRenderingContext2D, snake: SnakeState, headColor: string, glow: string | null): void {
+  const head = snake.segments[0];
+  const r = snake.radius * 1.4;
+
+  ctx.save();
+  if (glow) {
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 15;
+  }
+
+  // Head circle
+  ctx.fillStyle = headColor;
   ctx.beginPath();
-  ctx.moveTo(segments[0].x, segments[0].y);
-
-  // Use quadratic curves through midpoints for smooth path
-  for (let i = 1; i < segments.length - 1; i++) {
-    const midX = (segments[i].x + segments[i + 1].x) / 2;
-    const midY = (segments[i].y + segments[i + 1].y) / 2;
-    ctx.quadraticCurveTo(segments[i].x, segments[i].y, midX, midY);
-  }
-
-  // Last segment
-  const last = segments[segments.length - 1];
-  ctx.lineTo(last.x, last.y);
-  ctx.stroke();
-
-  // Swarm leader indicator: subtle trail glow
-  if (snake.swarmLeader) {
-    ctx.save();
-    ctx.strokeStyle = '#88FFAA';
-    ctx.lineWidth = snake.radius * 3;
-    ctx.globalAlpha = 0.15;
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Predator indicator: red aura
-  if (snake.predator) {
-    ctx.save();
-    ctx.strokeStyle = '#FF4466';
-    ctx.lineWidth = snake.radius * 3;
-    ctx.globalAlpha = 0.15;
-    ctx.stroke();
-    ctx.restore();
-  }
+  ctx.arc(head.x, head.y, r, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.shadowBlur = 0;
   ctx.shadowColor = 'transparent';
 
-  // Draw head
-  drawHead(ctx, snake, bodyColor);
-
-  ctx.globalAlpha = 1;
-}
-
-function drawHead(ctx: CanvasRenderingContext2D, snake: SnakeState, bodyColor: string): void {
-  const head = snake.segments[0];
-  const r = snake.radius * 1.4;
-
-  // Head circle
-  ctx.fillStyle = bodyColor;
-  ctx.beginPath();
-  ctx.arc(head.x, head.y, r, 0, Math.PI * 2);
-  ctx.fill();
+  // Predator: small fin spikes on head
+  if (snake.predator && (snake.effectDrain?.['predator'] ?? 0) > 0) {
+    const finAngle = snake.angle - Math.PI / 2;
+    ctx.fillStyle = '#FF4466';
+    ctx.globalAlpha = 0.7;
+    for (const side of [-1, 1]) {
+      const fx = head.x + Math.cos(finAngle) * r * 1.3 * side;
+      const fy = head.y + Math.sin(finAngle) * r * 1.3 * side;
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.lineTo(fx + Math.cos(snake.angle) * r * 0.8, fy + Math.sin(snake.angle) * r * 0.8);
+      ctx.lineTo(fx + Math.cos(finAngle) * r * 0.5 * side, fy + Math.sin(finAngle) * r * 0.5 * side);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
 
   // Eyes
   const eyeOffset = r * 0.5;
@@ -94,14 +201,28 @@ function drawHead(ctx: CanvasRenderingContext2D, snake: SnakeState, bodyColor: s
     ctx.arc(ex, ey, eyeR, 0, Math.PI * 2);
     ctx.fill();
 
-    // Star powerup: sparkle eyes
-    ctx.fillStyle = snake.starred ? '#FFD700' : '#000';
+    // Pupil color based on effect
+    const starActive = (snake.effectDrain?.['star'] ?? 0) > 0;
+    const predActive = (snake.effectDrain?.['predator'] ?? 0) > 0;
+    ctx.fillStyle = starActive ? '#FFD700' : predActive ? '#FF2244' : '#000';
     ctx.beginPath();
     ctx.arc(
       ex + Math.cos(snake.angle) * eyeR * 0.3,
       ey + Math.sin(snake.angle) * eyeR * 0.3,
-      eyeR * 0.5, 0, Math.PI * 2
+      eyeR * 0.5, 0, Math.PI * 2,
     );
     ctx.fill();
   }
+
+  ctx.restore();
+}
+
+/** Blend two hex colors. mix=0 → colorA, mix=1 → colorB */
+function blendColors(a: string, b: string, mix: number): string {
+  const ra = parseInt(a.slice(1, 3), 16), ga = parseInt(a.slice(3, 5), 16), ba = parseInt(a.slice(5, 7), 16);
+  const rb = parseInt(b.slice(1, 3), 16), gb = parseInt(b.slice(3, 5), 16), bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ra + (rb - ra) * mix);
+  const g = Math.round(ga + (gb - ga) * mix);
+  const bl = Math.round(ba + (bb - ba) * mix);
+  return `rgb(${r},${g},${bl})`;
 }

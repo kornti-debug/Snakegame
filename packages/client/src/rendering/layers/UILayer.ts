@@ -145,6 +145,7 @@ export class UILayer {
       { icon: '⭐', color: '#FFD700', name: 'Star (kill!)' },
       { icon: '🐟', color: '#44FFAA', name: 'Swarm Leader' },
       { icon: '🦈', color: '#FF4466', name: 'Predator' },
+      { icon: '🌱', color: '#44FF88', name: 'Growth (+20%)' },
     ];
 
     const x = ARENA_WIDTH - 170;

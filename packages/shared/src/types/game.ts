@@ -20,6 +20,8 @@ export interface SnakeState {
   starred: boolean;           // star powerup — invincible + kills on touch
   swarmLeader: boolean;       // boids follow this snake
   predator: boolean;          // boids flee with larger radius
+  // Active effect drain: 1.0 = just started, 0.0 = expired. Null = no effect.
+  effectDrain: Record<string, number>;  // effectId → remaining fraction (0..1)
 }
 
 export interface RevealDelta {

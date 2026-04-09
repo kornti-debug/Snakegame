@@ -7,6 +7,7 @@ import { Ghost } from '../powerups/Ghost.js';
 import { Star } from '../powerups/Star.js';
 import { SwarmLeader } from '../powerups/SwarmLeader.js';
 import { Predator } from '../powerups/Predator.js';
+import { Growth } from '../powerups/Growth.js';
 import {
   ARENA_WIDTH,
   ARENA_HEIGHT,
@@ -35,6 +36,7 @@ export class PowerUpSystem {
     this.registry.register(Star);
     this.registry.register(SwarmLeader);
     this.registry.register(Predator);
+    this.registry.register(Growth);
   }
 
   update(snakes: Snake[], dt: number): void {
@@ -112,6 +114,18 @@ export class PowerUpSystem {
     this.fieldPowerUps = [];
     this.activeEffects = [];
     this.spawnTimer = POWERUP_SPAWN_INTERVAL;
+  }
+
+  /** Get drain fractions for a specific snake: effectId → 0..1 (1 = just started) */
+  getEffectDrains(snakeId: string): Record<string, number> {
+    const drains: Record<string, number> = {};
+    for (const effect of this.activeEffects) {
+      if (effect.snakeId !== snakeId) continue;
+      const def = this.registry.get(effect.definitionId);
+      if (!def || def.duration <= 0) continue;
+      drains[effect.definitionId] = Math.max(0, Math.min(1, effect.remainingMs / def.duration));
+    }
+    return drains;
   }
 
   /** Force-expire all active effects on all snakes */
