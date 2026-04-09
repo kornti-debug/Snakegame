@@ -50,54 +50,32 @@ export class GameLayer {
   private drawPowerUp(ctx: CanvasRenderingContext2D, pu: PowerUpState): void {
     const { x, y } = pu.position;
     const pulse = 1 + Math.sin(this.pulseTime * 3) * 0.15;
-    const r = 14 * pulse;
+    const r = 16 * pulse;
 
-    // Glow
-    ctx.shadowColor = pu.renderHint.color;
-    ctx.shadowBlur = 15;
-
-    ctx.fillStyle = pu.renderHint.color;
-    ctx.globalAlpha = 0.9;
-
-    if (pu.renderHint.shape === 'diamond') {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(Math.PI / 4);
-      ctx.fillRect(-r * 0.7, -r * 0.7, r * 1.4, r * 1.4);
-      ctx.restore();
-    } else if (pu.renderHint.shape === 'star') {
-      this.drawStar(ctx, x, y, r);
-    } else {
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Inner icon
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
     const iconMap: Record<string, string> = {
       'speed-boost': '⚡', 'wide-trail': '◎', 'ghost': '👻',
       'star': '⭐', 'swarm-leader': '🐟', 'predator': '🦈',
     };
     const icon = iconMap[pu.type] ?? '?';
-    ctx.fillText(icon, x, y);
 
+    // Glowing circle background
+    ctx.save();
+    ctx.shadowColor = pu.renderHint.color;
+    ctx.shadowBlur = 18;
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = pu.renderHint.color;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
-  }
 
-  private drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
-    ctx.beginPath();
-    for (let i = 0; i < 5; i++) {
-      const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
-      const method = i === 0 ? 'moveTo' : 'lineTo';
-      ctx[method](cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
-    }
-    ctx.closePath();
-    ctx.fill();
+    // Emoji icon — large, centered, matching the legend
+    ctx.font = `${Math.round(r * 1.4)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(icon, x, y + 1);
+    ctx.restore();
   }
 
   private drawBoid(ctx: CanvasRenderingContext2D, boid: BoidState): void {
