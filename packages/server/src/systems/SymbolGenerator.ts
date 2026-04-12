@@ -3,7 +3,8 @@ export interface SymbolDef {
   imageUrl: string; // SVG data URI
 }
 
-/** 10 built-in default symbols as colored SVG data URIs */
+/** Built-in default symbols as colored SVG data URIs.
+ *  Must be >= max pairCount across BOARD_PRESETS (currently 20 for 'huge'). */
 const DEFAULT_SYMBOLS: SymbolDef[] = [
   { name: 'star',      imageUrl: buildSvg('★', '#FFD700') },
   { name: 'heart',     imageUrl: buildSvg('♥', '#FF4466') },
@@ -15,6 +16,20 @@ const DEFAULT_SYMBOLS: SymbolDef[] = [
   { name: 'crown',     imageUrl: buildSvg('♛', '#FFD700') },
   { name: 'flame',     imageUrl: buildSvg('🔥', '#FF6622') },
   { name: 'music',     imageUrl: buildSvg('♫', '#88DDFF') },
+  { name: 'anchor',    imageUrl: buildSvg('⚓', '#66DDFF') },
+  { name: 'snowflake', imageUrl: buildSvg('❄', '#AAEEFF') },
+  { name: 'sun',       imageUrl: buildSvg('☀', '#FFCC33') },
+  { name: 'umbrella',  imageUrl: buildSvg('☂', '#9966FF') },
+  { name: 'peace',     imageUrl: buildSvg('☮', '#88FF88') },
+  { name: 'yinyang',   imageUrl: buildSvg('☯', '#EEEEEE') },
+  { name: 'clover',    imageUrl: buildSvg('♣', '#44CC44') },
+  { name: 'spade',     imageUrl: buildSvg('♠', '#CCCCCC') },
+  { name: 'arrow',     imageUrl: buildSvg('➤', '#FF8844') },
+  { name: 'target',    imageUrl: buildSvg('◎', '#FF4488') },
+  { name: 'cross',     imageUrl: buildSvg('✚', '#FFFFFF') },
+  { name: 'key',       imageUrl: buildSvg('⚷', '#FFD700') },
+  { name: 'hex',       imageUrl: buildSvg('⬢', '#33AA33') },
+  { name: 'eye',       imageUrl: buildSvg('◉', '#66FFCC') },
 ];
 
 function buildSvg(char: string, color: string): string {

@@ -37,6 +37,14 @@ const socket = createSocket();
 // whether the game is actually running — the client overlays menus on top.
 type ClientScreen = 'main-menu' | 'instructions' | 'lobby' | 'ingame' | 'exit-confirm';
 let clientScreen: ClientScreen = 'main-menu';
+
+function setScreen(next: ClientScreen): void {
+  if (next === clientScreen) return;
+  // Respawn the ambient swarm every time we arrive at the main menu so the
+  // viewer sees the flock form up fresh instead of an already-settled swarm.
+  if (next === 'main-menu') bgBoids.reset();
+  clientScreen = next;
+}
 let latestSnapshot: GameSnapshot | null = null;
 let boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
 const joinedPlayers = new Set<number>();
@@ -51,9 +59,9 @@ window.addEventListener('keydown', (e) => {
   if (clientScreen === 'exit-confirm') {
     if (e.code === 'KeyY') {
       socket.emit('lobby:return');
-      clientScreen = 'main-menu';
+      setScreen('main-menu');
     } else if (e.code === 'KeyN' || e.code === 'Escape') {
-      clientScreen = 'ingame';
+      setScreen('ingame');
     }
     return;
   }
@@ -63,20 +71,20 @@ window.addEventListener('keydown', (e) => {
     else if (e.code === 'ArrowDown' || e.code === 'KeyS') mainMenuRenderer.move(1);
     else if (e.code === 'Enter') {
       const sel = mainMenuRenderer.selected;
-      if (sel === 'play') clientScreen = 'lobby';
-      else if (sel === 'instructions') clientScreen = 'instructions';
+      if (sel === 'play') setScreen('lobby');
+      else if (sel === 'instructions') setScreen('instructions');
     }
     return;
   }
 
   if (clientScreen === 'instructions') {
-    if (e.code === 'Escape' || e.code === 'Enter') clientScreen = 'main-menu';
+    if (e.code === 'Escape' || e.code === 'Enter') setScreen('main-menu');
     return;
   }
 
   if (clientScreen === 'lobby') {
     if (e.code === 'Escape') {
-      clientScreen = 'main-menu';
+      setScreen('main-menu');
       return;
     }
     // Player 1 join: A or D
@@ -122,7 +130,7 @@ window.addEventListener('keydown', (e) => {
 
   if (clientScreen === 'ingame') {
     if (e.code === 'Escape') {
-      clientScreen = 'exit-confirm';
+      setScreen('exit-confirm');
     }
     return;
   }
@@ -149,12 +157,12 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
   if (snapshot.gamePhase === 'ingame') {
     buffer.push(snapshot);
     if (clientScreen !== 'ingame' && clientScreen !== 'exit-confirm') {
-      clientScreen = 'ingame';
+      setScreen('ingame');
     }
   } else if (snapshot.gamePhase === 'lobby') {
     // Returned to lobby from game (e.g. after exit confirm)
     if (clientScreen === 'ingame' || clientScreen === 'exit-confirm') {
-      clientScreen = 'main-menu';
+      setScreen('main-menu');
     }
   }
 });
