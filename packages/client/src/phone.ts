@@ -12,6 +12,7 @@ const socket = createSocket();
 const statusDot = document.getElementById('status-dot')!;
 const statusText = document.getElementById('status-text')!;
 const leaveBtn = document.getElementById('leave-btn') as HTMLButtonElement;
+const fsBtn = document.getElementById('fs-btn') as HTMLButtonElement;
 
 const joinScreen = document.getElementById('join-screen')!;
 const settingsScreen = document.getElementById('settings-screen')!;
@@ -175,7 +176,30 @@ joinBtn.addEventListener('click', () => {
   socket.emit('phone:join', { name: myName || undefined });
   joinBtn.disabled = true;
   joinBtn.textContent = 'Joining…';
+  // Must happen inside the tap handler to satisfy the user-gesture rule.
+  requestFullscreen();
 });
+
+fsBtn.addEventListener('click', () => requestFullscreen());
+
+function requestFullscreen(): void {
+  const el = document.documentElement as HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void>;
+  };
+  try {
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  } catch {
+    // iOS Safari doesn't support fullscreen on documentElement; silently ignore.
+  }
+}
+
+function updateFsButton(): void {
+  const isFs = !!document.fullscreenElement;
+  fsBtn.classList.toggle('hidden', isFs);
+}
+document.addEventListener('fullscreenchange', updateFsButton);
+updateFsButton();
 
 leaveBtn.addEventListener('click', () => {
   if (playerIndex === null) return;

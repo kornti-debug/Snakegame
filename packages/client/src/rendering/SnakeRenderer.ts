@@ -1,4 +1,5 @@
 import type { SnakeState } from '@snakegame/shared';
+import { TEAM_COLORS } from '@snakegame/shared';
 
 let animTime = 0;
 
@@ -153,6 +154,25 @@ function drawHead(ctx: CanvasRenderingContext2D, snake: SnakeState, headColor: s
   const r = snake.radius * 1.4;
 
   ctx.save();
+
+  // Team halo — a ring in the team color just outside the head, drawn
+  // first so the head circle sits cleanly on top. Skipped for solo snakes.
+  if (snake.team !== null && snake.team >= 0 && snake.team < TEAM_COLORS.length) {
+    const teamColor = TEAM_COLORS[snake.team];
+    const haloR = r + 4;
+    // Subtle outer glow
+    ctx.save();
+    ctx.shadowColor = teamColor;
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = teamColor;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = snake.alive ? 0.95 : 0.4;
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, haloR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   if (glow) {
     ctx.shadowColor = glow;
     ctx.shadowBlur = 15;

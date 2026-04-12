@@ -20,6 +20,7 @@ export interface SnakeState {
   starred: boolean;           // star powerup — invincible + kills on touch
   swarmLeader: boolean;       // boids follow this snake
   predator: boolean;          // boids flee with larger radius
+  team: number | null;        // team index (see TEAM_COLORS); null = solo
   // Active effect drain: 1.0 = just started, 0.0 = expired. Null = no effect.
   effectDrain: Record<string, number>;  // effectId → remaining fraction (0..1)
 }

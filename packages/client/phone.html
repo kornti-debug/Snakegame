@@ -72,6 +72,16 @@
       font-family: inherit;
     }
     #leave-btn.visible { display: inline-block; }
+    #fs-btn {
+      padding: 5px 10px; font-size: 14px;
+      background: rgba(136, 221, 255, 0.1);
+      border: 1px solid rgba(136, 221, 255, 0.3);
+      color: #88ddff;
+      border-radius: 6px;
+      font-family: inherit;
+      line-height: 1;
+    }
+    #fs-btn.hidden { display: none; }
 
     .screen { flex: 1; display: none; flex-direction: column; overflow: hidden; }
     .screen.active { display: flex; }
@@ -238,6 +248,7 @@
     <div id="status">
       <div id="status-dot"></div>
       <div id="status-text">Connecting…</div>
+      <button id="fs-btn" title="Fullscreen">⛶</button>
       <button id="leave-btn">Leave</button>
     </div>
 

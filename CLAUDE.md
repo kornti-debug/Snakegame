@@ -57,7 +57,7 @@ npm run dev:client
 - Board preset picker in lobby (small / medium / large / huge) via keys 1-4 or [ / ]
 - Title: **SNAKE MEMORY**
 - **Phone-only input model**: the projector is host-only — no local keyboard players. All players join by scanning the lobby QR code (`/phone.html`). Phone has three screens: Join (name entry), Settings (in-lobby: name / color / team picker), Controller (tap-and-hold left/right zones while the game is running). Auto-switches between Settings ↔ Controller based on `gamePhase`. `MAX_PLAYERS` = 10.
-- **Teams**: `LobbyPlayer.team` (null = solo) + `player:set-team` event. 4 team colors defined in `TEAM_COLORS` / `TEAM_NAMES`. Shown as a colored dot on the lobby player row. Teams don't affect gameplay yet (reserved for a follow-up).
+- **Teams**: `LobbyPlayer.team` / `SnakeState.team` (null = solo) + `player:set-team` event. 4 team colors defined in `TEAM_COLORS` / `TEAM_NAMES`. Shown as a colored dot on the lobby player row and as a **team-colored halo ring around the snake's head** in-game. Teams don't affect gameplay yet (reserved for a follow-up).
 - **Host controls (mouse + a few keys)**: lobby is mouse-driven — click a preset card to pick the board, click the red X on a player row to kick, click "START GAME" (or press Enter). ESC in-game pauses + opens a dialog (R resume, Y exit, ESC/N resume). ESC in the lobby returns to the main menu. Phones can't trigger pause/kick (server gates via `phoneSockets`).
 - **External REST API** (`/api/external/*`) for Touch Designer integration
 - **WebSocket namespace** (`/touchdesigner`) for real-time TD events
