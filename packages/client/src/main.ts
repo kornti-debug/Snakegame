@@ -44,9 +44,13 @@ let boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
 function setScreen(next: ClientScreen): void {
   if (next === clientScreen) return;
   if (next === 'main-menu') bgBoids.reset();
-  if (next === 'ingame' && clientScreen !== 'exit-confirm') {
-    renderer.resetRound();
-  }
+  // Note: we intentionally do NOT call renderer.resetRound() when entering
+  // 'ingame'. The server emits game:round-start whenever a new round begins
+  // (including the very first one in startGame), and the handler below
+  // resets the layers + loads the new tile images there. Calling
+  // resetRound() here races with the async tile-image loads from
+  // round-start and wipes them, leaving the projector black during
+  // pre-reveal.
   clientScreen = next;
 }
 
