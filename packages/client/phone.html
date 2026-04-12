@@ -65,7 +65,38 @@
       transition: background 0.2s;
     }
     #status-dot.connected { background: #44ff44; }
-    #status-text { flex: 1; font-size: 12px; }
+    #status-text { font-size: 12px; }
+    /* In-game HUD lives inside the status bar so the arena canvas below
+       keeps the full real estate. Each item hides until relevant. */
+    #hud-bar {
+      flex: 1;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      overflow: hidden;
+      min-width: 0;
+    }
+    #hud-bar.visible { display: flex; }
+    #status-text.hidden { display: none; }
+    #hud-bar .hud-item {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+      min-width: 0;
+    }
+    #hud-bar .hud-item.flex { flex: 1; min-width: 0; }
+    #hud-bar .hud-item .label {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px;
+      color: rgba(136, 221, 255, 0.55);
+    }
+    #hud-bar .hud-item .value {
+      font-size: 12px; font-weight: bold;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    #hud-bar .hud-item .dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
     #leave-btn {
       display: none;
       padding: 5px 12px; font-size: 12px;
@@ -230,38 +261,9 @@
     #info-col {
       flex: 2.2;
       display: flex; flex-direction: column;
-      gap: 4px;
       padding: 4px;
       color: #fff;
       min-width: 0;
-    }
-    /* Compact HUD strip above the arena canvas. */
-    #hud {
-      display: flex; align-items: center; gap: 8px;
-      padding: 4px 6px;
-      font-size: 11px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(68, 170, 255, 0.25);
-      border-radius: 6px;
-      flex-shrink: 0;
-    }
-    #hud .hud-item {
-      display: flex; align-items: center; gap: 4px;
-      white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis;
-    }
-    #hud .hud-item.flex { flex: 1; min-width: 0; }
-    #hud .hud-item .label {
-      font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px;
-      color: rgba(136, 221, 255, 0.6);
-    }
-    #hud .hud-item .value {
-      font-size: 12px; font-weight: bold;
-      display: flex; align-items: center; gap: 4px;
-      overflow: hidden; text-overflow: ellipsis;
-    }
-    #hud .hud-item .dot {
-      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
     }
     #arena-canvas {
       flex: 1;
@@ -300,6 +302,20 @@
     <div id="status">
       <div id="status-dot"></div>
       <div id="status-text">Connecting…</div>
+      <div id="hud-bar">
+        <div class="hud-item flex">
+          <span class="dot" id="info-color"></span>
+          <span class="value" id="info-name">—</span>
+        </div>
+        <div class="hud-item">
+          <span class="dot" id="info-team-dot"></span>
+          <span class="value" id="info-team-name">Solo</span>
+        </div>
+        <div class="hud-item">
+          <span class="label">Pairs</span>
+          <span class="value" id="info-score">0</span>
+        </div>
+      </div>
       <button id="fs-btn" title="Fullscreen">⛶</button>
       <button id="leave-btn">Leave</button>
     </div>
@@ -340,20 +356,6 @@
     <div id="controller-screen" class="screen">
       <div class="pad" id="pad-left">◀</div>
       <div id="info-col">
-        <div id="hud">
-          <div class="hud-item flex">
-            <span class="dot" id="info-color"></span>
-            <span class="value" id="info-name">—</span>
-          </div>
-          <div class="hud-item">
-            <span class="dot" id="info-team-dot"></span>
-            <span class="value" id="info-team-name">Solo</span>
-          </div>
-          <div class="hud-item">
-            <span class="label">Pairs</span>
-            <span class="value" id="info-score">0</span>
-          </div>
-        </div>
         <div id="arena-wrap">
           <canvas id="arena-canvas"></canvas>
           <div id="arena-msg">waiting for game to start…</div>

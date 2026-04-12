@@ -77,6 +77,12 @@ function show(next: Screen): void {
   // Portrait is fine on Join (text entry). Landscape is required from
   // Settings onward, where controls are laid out horizontally.
   document.body.classList.toggle('allow-portrait', next === 'join' || next === 'error');
+
+  // Top-bar HUD only shows on the Controller; the status text shows elsewhere.
+  const onController = next === 'controller';
+  const hudBar = document.getElementById('hud-bar');
+  if (hudBar) hudBar.classList.toggle('visible', onController);
+  statusText.classList.toggle('hidden', onController);
 }
 
 function renderColorRow(): void {
