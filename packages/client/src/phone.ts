@@ -83,6 +83,9 @@ function show(next: Screen): void {
   const hudBar = document.getElementById('hud-bar');
   if (hudBar) hudBar.classList.toggle('visible', onController);
   statusText.classList.toggle('hidden', onController);
+  // Full-screen overlay layout only on Controller — turns the whole viewport
+  // into the arena with the bar + pads floating on top.
+  document.body.classList.toggle('controller-mode', onController);
 }
 
 function renderColorRow(): void {
