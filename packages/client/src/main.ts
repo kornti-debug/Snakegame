@@ -86,8 +86,10 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     if (e.code === 'Enter') {
-      const playerCount = latestSnapshot?.lobbyPlayers.length ?? 0;
-      if (playerCount >= 1) socket.emit('lobby:start-game');
+      const players = latestSnapshot?.lobbyPlayers ?? [];
+      if (players.length >= 1 && players.every(p => p.ready)) {
+        socket.emit('lobby:start-game');
+      }
     }
     return;
   }
@@ -137,8 +139,10 @@ mainCanvas.addEventListener('click', (e) => {
   } else if (action.type === 'kick') {
     socket.emit('lobby:kick', action.slot);
   } else if (action.type === 'start') {
-    const playerCount = latestSnapshot?.lobbyPlayers.length ?? 0;
-    if (playerCount >= 1) socket.emit('lobby:start-game');
+    const players = latestSnapshot?.lobbyPlayers ?? [];
+    if (players.length >= 1 && players.every(p => p.ready)) {
+      socket.emit('lobby:start-game');
+    }
   }
 });
 

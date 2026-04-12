@@ -99,8 +99,9 @@ export class LobbyRenderer {
     this.drawQrCard(ctx, RIGHT_X, SECTION_TOP, RIGHT_W, qrCardH);
     this.drawPresetGrid(ctx, RIGHT_X, SECTION_TOP + qrCardH + 18, RIGHT_W, 340, boardPreset);
 
-    // Footer: start button + hints
-    this.drawStartButton(ctx, players.length >= 1);
+    // Footer: start button — only enabled when all joined players are ready.
+    const allReady = players.length >= 1 && players.every(p => p.ready);
+    this.drawStartButton(ctx, allReady, players.length);
 
     ctx.font = '13px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
@@ -441,8 +442,8 @@ export class LobbyRenderer {
 
   // --- Start button ---
 
-  private drawStartButton(ctx: CanvasRenderingContext2D, enabled: boolean): void {
-    const w = 340, h = 64;
+  private drawStartButton(ctx: CanvasRenderingContext2D, enabled: boolean, playerCount: number): void {
+    const w = 380, h = 64;
     const x = (ARENA_WIDTH - w) / 2;
     const y = ARENA_HEIGHT - 120;
 
@@ -467,7 +468,12 @@ export class LobbyRenderer {
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 28px monospace';
     ctx.fillStyle = enabled ? '#aaffaa' : 'rgba(255,255,255,0.35)';
-    ctx.fillText(enabled ? 'START GAME' : 'WAITING FOR PLAYERS…', x + w / 2, y + h / 2);
+
+    let label: string;
+    if (playerCount === 0) label = 'WAITING FOR PLAYERS…';
+    else if (!enabled) label = 'WAITING FOR ALL READY…';
+    else label = 'START GAME';
+    ctx.fillText(label, x + w / 2, y + h / 2);
 
     if (enabled) {
       ctx.font = '12px monospace';

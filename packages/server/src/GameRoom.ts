@@ -176,6 +176,11 @@ export class GameRoom {
 
   startGame(): void {
     if (this.lobbyPlayers.size === 0) return;
+    // All joined players must be ready — the host UI already gates this,
+    // but re-check here so a phone can't force-start by emitting directly.
+    for (const p of this.lobbyPlayers.values()) {
+      if (!p.ready) return;
+    }
 
     this.gamePhase = 'ingame';
     this.paused = false;

@@ -32,6 +32,10 @@
     @media (orientation: portrait) {
       #rotate-hint { display: flex; }
     }
+    /* Allow portrait on the Join screen — it has a text field that's
+       much easier to use upright. Landscape is only required from the
+       Settings screen onward. */
+    body.allow-portrait #rotate-hint { display: none !important; }
     #rotate-hint .icon {
       width: 72px; height: 120px;
       border: 3px solid #44aaff; border-radius: 10px;
@@ -175,6 +179,21 @@
       font-style: italic;
       padding: 6px;
     }
+    #ready-btn {
+      width: 100%;
+      padding: 16px; font-size: 18px; font-weight: bold;
+      background: rgba(68, 255, 68, 0.15);
+      border: 2px solid rgba(68, 255, 68, 0.55);
+      color: #aaffaa;
+      border-radius: 10px;
+      font-family: inherit;
+    }
+    #ready-btn.ready {
+      background: rgba(68, 255, 68, 0.35);
+      border-color: #44ff44;
+      color: #fff;
+      box-shadow: 0 0 12px rgba(68, 255, 68, 0.5);
+    }
 
     /* ---- Controller (landscape: [pad][info][pad]) ---- */
     #controller-screen {
@@ -278,8 +297,9 @@
           <h2>Color</h2>
           <div id="color-row" class="swatch-row"></div>
         </div>
+        <button id="ready-btn">Tap when Ready</button>
         <div id="settings-hint" class="settings-block">
-          waiting for host to start the game…
+          host starts the game when all players are ready
         </div>
       </div>
     </div>

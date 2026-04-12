@@ -30,6 +30,7 @@ const teamRow = document.getElementById('team-row')!;
 
 const padLeft = document.getElementById('pad-left')!;
 const padRight = document.getElementById('pad-right')!;
+const readyBtn = document.getElementById('ready-btn') as HTMLButtonElement;
 
 // Controller info column
 const infoColor = document.getElementById('info-color') as HTMLElement;
@@ -42,6 +43,7 @@ let playerIndex: number | null = null;
 let myName = '';
 let myColor = PLAYER_COLORS[0];
 let myTeam: number | null = null;
+let myReady = false;
 let connected = false;
 let lastTurn: -1 | 0 | 1 = 0;
 type Screen = 'join' | 'settings' | 'controller' | 'error';
@@ -60,6 +62,9 @@ function show(next: Screen): void {
   ] as const) {
     el.classList.toggle('active', id === next);
   }
+  // Portrait is fine on Join (text entry). Landscape is required from
+  // Settings onward, where controls are laid out horizontally.
+  document.body.classList.toggle('allow-portrait', next === 'join' || next === 'error');
 }
 
 function renderColorRow(): void {
@@ -121,12 +126,14 @@ socket.on('disconnect', () => {
 socket.on('phone:joined', ({ playerIndex: idx, color }) => {
   playerIndex = idx;
   myColor = color;
+  myReady = false;
   slotLabel.textContent = `Player ${idx + 1}`;
   settingsName.value = myName;
   setStatus(`Player ${idx + 1}`, true);
   leaveBtn.classList.add('visible');
   renderColorRow();
   renderTeamRow();
+  renderReadyBtn();
   show('settings');
 });
 
@@ -144,8 +151,23 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
   } else if (snapshot.gamePhase === 'lobby' && screen === 'controller') {
     show('settings');
   }
+
+  // Sync my ready state from the server snapshot so the button visual
+  // stays in sync (e.g. server resets ready=false when returning to lobby).
+  const me = snapshot.lobbyPlayers.find(p => p.index === playerIndex);
+  const serverReady = !!me?.ready;
+  if (serverReady !== myReady) {
+    myReady = serverReady;
+    renderReadyBtn();
+  }
+
   updateInfoColumn(snapshot);
 });
+
+function renderReadyBtn(): void {
+  readyBtn.classList.toggle('ready', myReady);
+  readyBtn.textContent = myReady ? '✓ Ready — waiting for others' : 'Tap when Ready';
+}
 
 function updateInfoColumn(snapshot: GameSnapshot): void {
   if (playerIndex === null) return;
@@ -182,6 +204,15 @@ joinBtn.addEventListener('click', () => {
 
 fsBtn.addEventListener('click', () => requestFullscreen());
 
+readyBtn.addEventListener('click', () => {
+  if (playerIndex === null) return;
+  // Server toggles ready state. We optimistically flip so the button
+  // feels responsive; the next snapshot reconciles.
+  socket.emit('player:ready', playerIndex);
+  myReady = !myReady;
+  renderReadyBtn();
+});
+
 function requestFullscreen(): void {
   const el = document.documentElement as HTMLElement & {
     webkitRequestFullscreen?: () => Promise<void>;
@@ -206,6 +237,7 @@ leaveBtn.addEventListener('click', () => {
   socket.emit('player:leave', playerIndex);
   playerIndex = null;
   lastTurn = 0;
+  myReady = false;
   padLeft.classList.remove('active');
   padRight.classList.remove('active');
   leaveBtn.classList.remove('visible');
