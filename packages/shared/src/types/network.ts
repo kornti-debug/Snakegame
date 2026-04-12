@@ -1,6 +1,8 @@
 import type { GameSnapshot, RevealDelta, MemoryTile, BoardPreset } from './game.js';
 
 export interface ServerToClientEvents {
+  'phone:joined': (payload: { playerIndex: number; color: string }) => void;
+  'phone:join-error': (payload: { reason: string }) => void;
   'game:snapshot': (snapshot: GameSnapshot) => void;
   'game:reveal-update': (delta: RevealDelta) => void;
   'game:player-died': (payload: { playerId: string; killerId: string | null }) => void;
@@ -45,6 +47,7 @@ export interface ClientToServerEvents {
   'lobby:start-game': () => void;
   'lobby:return': () => void;
   'lobby:set-config': (payload: { preset: BoardPreset }) => void;
+  'phone:join': (payload: { name?: string }) => void;
 }
 
 export interface InterServerEvents {}

@@ -56,6 +56,16 @@ export class SocketManager {
         }
       });
 
+      socket.on('phone:join', ({ name }) => {
+        const result = this.room.phoneJoin(socket.id, name?.trim() || `Phone ${socket.id.slice(0, 4)}`);
+        if (!result) {
+          socket.emit('phone:join-error', { reason: 'Lobby full or game in progress' });
+          return;
+        }
+        socket.emit('phone:joined', { playerIndex: result.index, color: result.color });
+        console.log(`[Phone] Joined as slot ${result.index + 1} (${socket.id.slice(0, 6)})`);
+      });
+
       socket.on('lobby:set-config', ({ preset }) => {
         if (this.room.gamePhase !== 'lobby') return;
         if (preset !== 'small' && preset !== 'medium' && preset !== 'large' && preset !== 'huge') return;

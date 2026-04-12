@@ -6,6 +6,7 @@ import { MainMenuRenderer } from './rendering/MainMenuRenderer.js';
 import { InstructionsRenderer } from './rendering/InstructionsRenderer.js';
 import { ConfirmDialogRenderer } from './rendering/ConfirmDialogRenderer.js';
 import { BackgroundBoids } from './rendering/BackgroundBoids.js';
+import { QrCache } from './rendering/QrCache.js';
 import { InputManager } from './input/InputManager.js';
 import { KeyboardProvider } from './input/KeyboardProvider.js';
 import type { GameSnapshot, BoardPreset } from '@snakegame/shared';
@@ -25,7 +26,11 @@ container.appendChild(mainCanvas);
 
 const renderer = new Renderer(container, mainCanvas);
 const bgBoids = new BackgroundBoids(); // shared ambient swarm across menu + lobby
-const lobbyRenderer = new LobbyRenderer(mainCanvas, bgBoids);
+// Phone-join URL: same origin + /phone. For this to work the projector must
+// be served from a LAN-reachable address (vite already listens on 0.0.0.0).
+const phoneUrl = `${window.location.origin}/phone.html`;
+const qrCache = new QrCache(phoneUrl);
+const lobbyRenderer = new LobbyRenderer(mainCanvas, bgBoids, qrCache);
 const mainMenuRenderer = new MainMenuRenderer(mainCanvas, bgBoids);
 const instructionsRenderer = new InstructionsRenderer(mainCanvas);
 const confirmRenderer = new ConfirmDialogRenderer(mainCanvas);
@@ -51,7 +56,8 @@ const joinedPlayers = new Set<number>();
 const PRESETS: BoardPreset[] = ['small', 'medium', 'large', 'huge'];
 
 // TODO(midi): register a MidiProvider alongside KeyboardProvider below.
-// TODO(phone-join): phone clients would register here too, one provider per phone session.
+// (Phone clients don't register here — they have their own socket and send
+// input:turn directly. See packages/client/src/phone.ts.)
 
 // --- Keyboard routing ---
 window.addEventListener('keydown', (e) => {

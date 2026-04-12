@@ -1,6 +1,7 @@
 import type { LobbyPlayer, BoardPreset } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, BOARD_PRESETS } from '@snakegame/shared';
 import { BackgroundBoids } from './BackgroundBoids.js';
+import type { QrCache } from './QrCache.js';
 
 const PRESET_ORDER: BoardPreset[] = ['small', 'medium', 'large', 'huge'];
 
@@ -9,11 +10,13 @@ export class LobbyRenderer {
   private ctx: CanvasRenderingContext2D;
   private pulseTime = 0;
   private boids: BackgroundBoids;
+  private qr?: QrCache;
 
-  constructor(canvas: HTMLCanvasElement, boids?: BackgroundBoids) {
+  constructor(canvas: HTMLCanvasElement, boids?: BackgroundBoids, qr?: QrCache) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.boids = boids ?? new BackgroundBoids();
+    this.qr = qr;
   }
 
   render(players: LobbyPlayer[], boardPreset: BoardPreset = 'medium'): void {
@@ -83,6 +86,40 @@ export class LobbyRenderer {
     ctx.font = '14px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
     ctx.fillText('ESC returns to main menu  ·  double-click for fullscreen', ARENA_WIDTH / 2, ARENA_HEIGHT - 30);
+
+    // QR code (top-right) — scan with phone to join as a player
+    if (this.qr) this.drawQrBlock(ctx);
+  }
+
+  private drawQrBlock(ctx: CanvasRenderingContext2D): void {
+    const qr = this.qr!;
+    const canvas = qr.getCanvas();
+    const size = 200;
+    const x = ARENA_WIDTH - size - 40;
+    const y = 40;
+
+    // White backing
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x - 8, y - 8, size + 16, size + 16 + 40);
+
+    if (canvas) {
+      ctx.drawImage(canvas, x, y, size, size);
+    } else {
+      ctx.fillStyle = '#888';
+      ctx.font = '14px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('QR…', x + size / 2, y + size / 2);
+    }
+
+    ctx.fillStyle = '#0a0a1a';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('SCAN TO JOIN', x + size / 2, y + size + 6);
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#444';
+    ctx.fillText(qr.url.replace(/^https?:\/\//, ''), x + size / 2, y + size + 22);
   }
 
   private drawPresetCards(ctx: CanvasRenderingContext2D, y: number, selected: BoardPreset): void {

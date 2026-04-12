@@ -56,6 +56,7 @@ npm run dev:client
 - Lobby/menu system — main menu + instructions screen + exit confirm dialog, ambient flocking boids behind menus
 - Board preset picker in lobby (small / medium / large / huge) via keys 1-4 or [ / ]
 - Title: **SNAKE MEMORY**
+- **Phone-join (Phase 1)**: QR code in lobby points to `/phone.html`; phone clients act as virtual gamepads (tap-and-hold left/right zones → `input:turn`). Auto-allocates the lowest free slot (max 4 players, keyboard + phones mix).
 - **External REST API** (`/api/external/*`) for Touch Designer integration
 - **WebSocket namespace** (`/touchdesigner`) for real-time TD events
 - Tile image management (built-in SVG defaults + TD override via API)
@@ -70,8 +71,9 @@ npm run dev:client
 - Sound effects
 - Stream overlay data
 - Powerup slot system (1 active slot + stacking passives, manual activation button, "Steering" passive)
-- Input expansion: 3–4 players, gamepad auto-detect, MIDI provider
-- Phone-app join via QR code (PWA client, new socket namespace, per-player HUD on phone)
+- Input expansion: gamepad auto-detect, MIDI provider
+- Phone-join Phase 2: on-phone game view (slither.io-style follow camera), personal HUD, active-powerup button
+- Phone-join Phase 3: larger arena enabled by per-player phone view
 
 ## External API (Touch Designer)
 

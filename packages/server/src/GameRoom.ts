@@ -60,6 +60,22 @@ export class GameRoom {
     });
   }
 
+  /** Allocate the lowest free global slot (0..MAX-1) for a phone client.
+   *  Returns { index, color } or null if full. Registers the phone as
+   *  a normal lobby player under its own socket. */
+  phoneJoin(socketId: string, name: string = 'Phone', maxSlots: number = 4): { index: number; color: string } | null {
+    if (this.gamePhase !== 'lobby') return null;
+    const used = new Set<number>();
+    for (const p of this.lobbyPlayers.values()) used.add(p.index);
+    for (let i = 0; i < maxSlots; i++) {
+      if (used.has(i)) continue;
+      this.lobbyJoin(socketId, i, name);
+      const joined = this.lobbyPlayers.get(`${socketId}:${i}`);
+      return { index: i, color: joined?.color ?? PLAYER_COLORS[i % PLAYER_COLORS.length] };
+    }
+    return null;
+  }
+
   lobbyLeave(socketId: string, playerIndex: number): void {
     this.lobbyPlayers.delete(`${socketId}:${playerIndex}`);
   }
