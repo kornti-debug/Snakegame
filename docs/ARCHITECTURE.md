@@ -64,7 +64,7 @@ The game server is **authoritative** — all game state is computed server-side.
 ## Key Systems
 
 ### Memory Board System
-Manages the 5x4 tile grid (20 tiles, 10 pairs). Uses a **block-to-tile lookup table** (`Uint8Array`) for O(1) mapping of reveal-grid blocks to tiles. Tracks per-tile per-snake reveal counts, detects captures at 90% threshold, and checks pair matching (same-snake requirement).
+Manages the tile grid. Board shape is supplied by a `BoardConfig` (see `BOARD_PRESETS` in `packages/shared/src/constants.ts`) — the lobby host picks a preset (small / medium / large / huge; 6 to 20 pairs). `MemoryBoardSystem.setConfig(cfg)` is called before each `generateBoard()`. Uses a **block-to-tile lookup table** (`Uint8Array`) for O(1) mapping of reveal-grid blocks to tiles. Tracks per-tile per-snake reveal counts, detects captures at 90% threshold, and checks pair matching (same-snake requirement).
 
 ### Boid (AI Swarm) System
 Implements Craig Reynolds' flocking algorithm with an **alpha/follower** hierarchy:
@@ -124,13 +124,13 @@ KeyPress → KeyboardProvider.poll() → InputManager
 ### Memory Card Flow
 ```
 Round start → MemoryBoardSystem.generateBoard(symbols)
-  → Tiles placed in 5x4 grid, block-to-tile lookup built
+  → Tiles placed in preset grid, block-to-tile lookup built
   → Client loads tile images at grid positions
 Each tick:
   → RevealSystem marks blocks, MemoryBoard attributes to tiles/snakes
   → Tile at 90%+ → captured by top-contributing snake
   → Both tiles of pair captured by same snake → pair matched, +1 point
-  → All 10 pairs matched → round ends early
+  → All pairs matched → round ends early
 ```
 
 ## Implementation Status

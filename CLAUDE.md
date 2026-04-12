@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ## Project Overview
-Multiplayer Snake game (Slither.io style, smooth curves) for a university exhibition (CAMI / BCC4 @ FH St. Polten). Projected on wall, 2+ local players, Twitch audience interaction via Touch Designer bridge.
+**Snake Memory** — a multiplayer Snake game (Slither.io style, smooth curves) crossed with a memory-match card game, for a university exhibition (CAMI / BCC4 @ FH St. Polten). Projected on wall, 2+ local players, Twitch audience interaction via Touch Designer bridge.
 
 ## Build & Run
 
@@ -44,7 +44,7 @@ npm run dev:client
 - Gamepad input provider (ready, not actively used yet)
 - Canvas rendering with bezier curve snakes + eyes
 - 5-canvas layer stack (background tiles, reveal mask, tile overlay, game objects, UI)
-- **Memory card game** mechanic (20 tiles, 10 pairs, 90% capture threshold, same-snake matching)
+- **Memory card game** mechanic (configurable board: small 4×3/6 pairs → huge 7×6/20 pairs, 90% capture threshold, same-snake matching)
 - Per-snake per-tile reveal tracking with visual breakdown bars
 - Round management (waiting → playing → ended → repeat, 120s rounds)
 - Power-up system: SpeedBoost, WideTrail, Ghost, Star, SwarmLeader, Predator (plugin registry)
@@ -53,7 +53,9 @@ npm run dev:client
 - State interpolation (30Hz server → 60fps client, includes boid interpolation)
 - Graceful server shutdown (Ctrl+C)
 - Obstacle entity (for God Mode / external API)
-- Lobby/menu system (player join, color selection, start game)
+- Lobby/menu system — main menu + instructions screen + exit confirm dialog, ambient flocking boids behind menus
+- Board preset picker in lobby (small / medium / large / huge) via keys 1-4 or [ / ]
+- Title: **SNAKE MEMORY**
 - **External REST API** (`/api/external/*`) for Touch Designer integration
 - **WebSocket namespace** (`/touchdesigner`) for real-time TD events
 - Tile image management (built-in SVG defaults + TD override via API)
@@ -67,6 +69,9 @@ npm run dev:client
 - Visual polish — capture/match animations, death effects
 - Sound effects
 - Stream overlay data
+- Powerup slot system (1 active slot + stacking passives, manual activation button, "Steering" passive)
+- Input expansion: 3–4 players, gamepad auto-detect, MIDI provider
+- Phone-app join via QR code (PWA client, new socket namespace, per-player HUD on phone)
 
 ## External API (Touch Designer)
 
@@ -109,4 +114,13 @@ Auth: `{ auth: { apiKey: "your-key" } }` (set `API_KEY` env var on server)
 Arena (1920x1080) divided into 16×9 cells (120×120px each). Columns A-P, rows 1-9. Example: `D5` = center of column D, row 5 = pixel (420, 540).
 
 ### Memory Tile Grid
-5×4 tile grid (240×240px tiles, 8px gaps) centered in arena. Tiles use built-in SVG symbols by default. Override via `POST /tiles`.
+Board is preset-driven (chosen in lobby, sent via `lobby:set-config` socket event, echoed in `GameSnapshot.boardPreset`). Defined in `BOARD_PRESETS` in `packages/shared/src/constants.ts`:
+
+| Preset  | Grid | Pairs | Tile size |
+|---------|------|-------|-----------|
+| small   | 4×3  | 6     | 240×240   |
+| medium  | 5×4  | 10    | 240×240   | *(default)*
+| large   | 6×5  | 15    | 200×200   |
+| huge    | 7×6  | 20    | 160×160   |
+
+Layout is auto-centered in the 1920×1080 arena with 8px gaps. Tiles use built-in SVG symbols by default. Override via `POST /tiles`.

@@ -56,6 +56,13 @@ export class SocketManager {
         }
       });
 
+      socket.on('lobby:set-config', ({ preset }) => {
+        if (this.room.gamePhase !== 'lobby') return;
+        if (preset !== 'small' && preset !== 'medium' && preset !== 'large' && preset !== 'huge') return;
+        this.room.boardPreset = preset;
+        console.log(`[Lobby] Board preset set to ${preset}`);
+      });
+
       socket.on('lobby:return', () => {
         if (this.room.gamePhase === 'ingame') {
           this.room.returnToLobby();

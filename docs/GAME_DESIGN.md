@@ -1,10 +1,10 @@
-# Game Design Document
+# Game Design Document — Snake Memory
 
 ## Concept
 
-A multiplayer Snake game for interactive exhibitions (CAMI / BCC4 @ FH St. Polten). Projected on a wall, 2+ local players compete while a Twitch audience participates remotely through chat with a credit-based economy.
+**Snake Memory** — a multiplayer Snake game for interactive exhibitions (CAMI / BCC4 @ FH St. Polten). Projected on a wall, 2+ local players compete while a Twitch audience participates remotely through chat with a credit-based economy.
 
-The core mechanic: a **memory card game** — the arena contains 20 tiles (10 matching pairs) covered by an opaque layer. As snakes move, they reveal the hidden tile images. Capture tiles by revealing 90%+ and match pairs to score points. Twitch viewers earn credits by guessing symbols and spend them to influence the game.
+The core mechanic: a **memory card game** — the arena contains a grid of tiles (matching pairs) covered by an opaque layer. As snakes move, they reveal the hidden tile images. Capture tiles by revealing 90%+ and match pairs to score points. Board size is picked in the lobby (preset cards: small / medium / large / huge — 6 to 20 pairs). Twitch viewers earn credits by guessing symbols and spend them to influence the game.
 
 ## Exhibition Setup
 
@@ -49,8 +49,8 @@ The core mechanic: a **memory card game** — the arena contains 20 tiles (10 ma
 ## Memory Card Game Mechanic
 
 ### How It Works
-1. Arena (1920x1080) contains a **5x4 grid of tiles** (240x240px each, 8px gaps)
-2. Each tile has a matching partner somewhere else (10 pairs, 20 tiles total)
+1. Arena (1920x1080) contains a **configurable grid of tiles** (preset small 4×3 → huge 7×6, auto-centered)
+2. Each tile has a matching partner somewhere else (6 to 20 pairs depending on preset)
 3. Tiles are covered by an opaque mask — snakes reveal them by moving over them
 4. When a snake reveals **90%+** of a tile, it's **captured** by whoever revealed the most
 5. When the **same snake** captures both tiles of a pair, the pair is **matched** and they score a point
@@ -117,10 +117,10 @@ The power-up system is plugin-based — new power-ups = new file + one `register
 ### Earning Credits
 | Action | Reward | How |
 |--------|--------|-----|
-| Correct symbol guess | 50 | Guess one of the 10 symbol names (`!guess star`) |
+| Correct symbol guess | 50 | Guess one of the active symbol names (`!guess star`) |
 | Joining | 100 | Automatic on first join |
 
-10 pairs per round = 10 symbols to guess = up to 500 credits earnable per round.
+Credits earnable per round scale with pair count (e.g. 10 pairs = up to 500 credits).
 
 ## Round Flow
 
@@ -128,7 +128,7 @@ The power-up system is plugin-based — new power-ups = new file + one `register
 1. [WAITING]    → 5s countdown, players position
 2. [PLAYING]    → 120s round, snakes reveal tiles, boids roam
                   Tiles captured at 90%, pairs matched by same snake
-                  Round ends at timer OR when all 10 pairs matched
+                  Round ends at timer OR when all pairs matched
 3. [ENDED]      → 4s scoreboard, winner announced
 4. → Back to [WAITING] with new tile layout
 ```

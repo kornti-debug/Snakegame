@@ -1,5 +1,5 @@
-import type { GameSnapshot, GamePhase, LobbyPlayer, Vector2D } from '@snakegame/shared';
-import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS, COST_POWERUP, COST_OBSTACLE, COST_HINT, REWARD_CORRECT_GUESS, BOID_REVEAL_RADIUS, cellToPixel, isValidCell } from '@snakegame/shared';
+import type { GameSnapshot, GamePhase, LobbyPlayer, Vector2D, BoardPreset } from '@snakegame/shared';
+import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS, COST_POWERUP, COST_OBSTACLE, COST_HINT, REWARD_CORRECT_GUESS, BOID_REVEAL_RADIUS, BOARD_PRESETS, DEFAULT_BOARD_PRESET, cellToPixel, isValidCell } from '@snakegame/shared';
 import { Snake } from './entities/Snake.js';
 import { Obstacle } from './entities/Obstacle.js';
 import { PowerUp } from './entities/PowerUp.js';
@@ -37,6 +37,9 @@ export class GameRoom {
 
   // Custom tile symbols from TD (null = use defaults)
   private customSymbols: SymbolDef[] | null = null;
+
+  // Board preset chosen in lobby (applied at round start)
+  boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
 
   pendingEvents: GameEvent[] = [];
 
@@ -178,6 +181,7 @@ export class GameRoom {
     if (phaseChange === 'playing') {
       this.resetForNewRound(snakes);
       const symbols = this.customSymbols ?? getDefaultSymbols();
+      this.memoryBoardSystem.setConfig(BOARD_PRESETS[this.boardPreset]);
       this.memoryBoardSystem.generateBoard(symbols);
 
       this.pendingEvents.push({
@@ -336,6 +340,7 @@ export class GameRoom {
       lobbyPlayers: this.getLobbyPlayers(),
       memoryBoard: this.memoryBoardSystem.getBoardState(),
       hints: this.memoryBoardSystem.getHints(),
+      boardPreset: this.boardPreset,
     };
   }
 

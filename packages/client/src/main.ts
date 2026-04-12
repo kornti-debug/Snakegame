@@ -2,15 +2,18 @@ import { createSocket } from './network/ClientSocket.js';
 import { InterpolationBuffer } from './network/Interpolation.js';
 import { Renderer } from './rendering/Renderer.js';
 import { LobbyRenderer } from './rendering/LobbyRenderer.js';
+import { MainMenuRenderer } from './rendering/MainMenuRenderer.js';
+import { InstructionsRenderer } from './rendering/InstructionsRenderer.js';
+import { ConfirmDialogRenderer } from './rendering/ConfirmDialogRenderer.js';
+import { BackgroundBoids } from './rendering/BackgroundBoids.js';
 import { InputManager } from './input/InputManager.js';
 import { KeyboardProvider } from './input/KeyboardProvider.js';
-import type { GameSnapshot, GamePhase } from '@snakegame/shared';
-import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS } from '@snakegame/shared';
+import type { GameSnapshot, BoardPreset } from '@snakegame/shared';
+import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS, DEFAULT_BOARD_PRESET } from '@snakegame/shared';
 
 // --- Setup ---
 const container = document.getElementById('game')!;
 
-// Main canvas (shared between lobby and game)
 const mainCanvas = document.createElement('canvas');
 mainCanvas.width = ARENA_WIDTH;
 mainCanvas.height = ARENA_HEIGHT;
@@ -21,22 +24,61 @@ mainCanvas.style.background = '#000';
 container.appendChild(mainCanvas);
 
 const renderer = new Renderer(container, mainCanvas);
-const lobbyRenderer = new LobbyRenderer(mainCanvas);
+const bgBoids = new BackgroundBoids(); // shared ambient swarm across menu + lobby
+const lobbyRenderer = new LobbyRenderer(mainCanvas, bgBoids);
+const mainMenuRenderer = new MainMenuRenderer(mainCanvas, bgBoids);
+const instructionsRenderer = new InstructionsRenderer(mainCanvas);
+const confirmRenderer = new ConfirmDialogRenderer(mainCanvas);
 const inputManager = new InputManager();
 const buffer = new InterpolationBuffer();
 const socket = createSocket();
 
-let currentPhase: GamePhase = 'lobby';
+// Client-side screen machine. Server phase ('lobby' | 'ingame') drives only
+// whether the game is actually running — the client overlays menus on top.
+type ClientScreen = 'main-menu' | 'instructions' | 'lobby' | 'ingame' | 'exit-confirm';
+let clientScreen: ClientScreen = 'main-menu';
 let latestSnapshot: GameSnapshot | null = null;
-const joinedPlayers = new Set<number>(); // track which players we've joined
+let boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
+const joinedPlayers = new Set<number>();
+const PRESETS: BoardPreset[] = ['small', 'medium', 'large', 'huge'];
 
-// --- Lobby keyboard handling ---
-const lobbyKeys = new Set<string>();
+// TODO(midi): register a MidiProvider alongside KeyboardProvider below.
+// TODO(phone-join): phone clients would register here too, one provider per phone session.
 
+// --- Keyboard routing ---
 window.addEventListener('keydown', (e) => {
-  lobbyKeys.add(e.code);
+  // Global: exit-confirm always wins
+  if (clientScreen === 'exit-confirm') {
+    if (e.code === 'KeyY') {
+      socket.emit('lobby:return');
+      clientScreen = 'main-menu';
+    } else if (e.code === 'KeyN' || e.code === 'Escape') {
+      clientScreen = 'ingame';
+    }
+    return;
+  }
 
-  if (currentPhase === 'lobby') {
+  if (clientScreen === 'main-menu') {
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') mainMenuRenderer.move(-1);
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') mainMenuRenderer.move(1);
+    else if (e.code === 'Enter') {
+      const sel = mainMenuRenderer.selected;
+      if (sel === 'play') clientScreen = 'lobby';
+      else if (sel === 'instructions') clientScreen = 'instructions';
+    }
+    return;
+  }
+
+  if (clientScreen === 'instructions') {
+    if (e.code === 'Escape' || e.code === 'Enter') clientScreen = 'main-menu';
+    return;
+  }
+
+  if (clientScreen === 'lobby') {
+    if (e.code === 'Escape') {
+      clientScreen = 'main-menu';
+      return;
+    }
     // Player 1 join: A or D
     if ((e.code === 'KeyA' || e.code === 'KeyD') && !joinedPlayers.has(0)) {
       joinedPlayers.add(0);
@@ -50,37 +92,43 @@ window.addEventListener('keydown', (e) => {
       inputManager.addProvider(new KeyboardProvider('arrows'));
     }
 
-    // Color cycling (W/S for P1, Up/Down for P2)
-    if (e.code === 'KeyW' && joinedPlayers.has(0)) {
-      cycleColor(0, -1);
-    }
-    if (e.code === 'KeyS' && joinedPlayers.has(0)) {
-      cycleColor(0, 1);
-    }
-    if (e.code === 'ArrowUp' && joinedPlayers.has(1)) {
-      cycleColor(1, -1);
-    }
-    if (e.code === 'ArrowDown' && joinedPlayers.has(1)) {
-      cycleColor(1, 1);
+    // Color cycling
+    if (e.code === 'KeyW' && joinedPlayers.has(0)) cycleColor(0, -1);
+    if (e.code === 'KeyS' && joinedPlayers.has(0)) cycleColor(0, 1);
+    if (e.code === 'ArrowUp' && joinedPlayers.has(1)) cycleColor(1, -1);
+    if (e.code === 'ArrowDown' && joinedPlayers.has(1)) cycleColor(1, 1);
+
+    // Board preset: 1-4 picks a card directly; [ / ] still cycle as a fallback.
+    const digitMap: Record<string, BoardPreset> = {
+      Digit1: 'small', Digit2: 'medium', Digit3: 'large', Digit4: 'huge',
+      Numpad1: 'small', Numpad2: 'medium', Numpad3: 'large', Numpad4: 'huge',
+    };
+    const pickedByDigit = digitMap[e.code];
+    if (pickedByDigit) {
+      boardPreset = pickedByDigit;
+      socket.emit('lobby:set-config', { preset: boardPreset });
+    } else if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
+      const dir = e.code === 'BracketRight' ? 1 : -1;
+      const idx = (PRESETS.indexOf(boardPreset) + dir + PRESETS.length) % PRESETS.length;
+      boardPreset = PRESETS[idx];
+      socket.emit('lobby:set-config', { preset: boardPreset });
     }
 
-    // Start game
     if (e.code === 'Enter' && joinedPlayers.size > 0) {
       socket.emit('lobby:start-game');
     }
+    return;
   }
 
-  // Return to lobby during game
-  if (e.code === 'Escape' && currentPhase === 'ingame') {
-    socket.emit('lobby:return');
+  if (clientScreen === 'ingame') {
+    if (e.code === 'Escape') {
+      clientScreen = 'exit-confirm';
+    }
+    return;
   }
 });
 
-window.addEventListener('keyup', (e) => {
-  lobbyKeys.delete(e.code);
-});
-
-let colorIndices = [0, 1]; // track color index per player
+let colorIndices = [0, 1];
 function cycleColor(playerIndex: number, dir: number): void {
   colorIndices[playerIndex] = (colorIndices[playerIndex] + dir + PLAYER_COLORS.length) % PLAYER_COLORS.length;
   socket.emit('player:set-color', playerIndex, PLAYER_COLORS[colorIndices[playerIndex]]);
@@ -93,10 +141,21 @@ socket.on('connect', () => {
 
 socket.on('game:snapshot', (snapshot: GameSnapshot) => {
   latestSnapshot = snapshot;
-  currentPhase = snapshot.gamePhase;
 
-  if (currentPhase === 'ingame') {
+  // Sync server board preset to client (server is authoritative once set)
+  if (snapshot.boardPreset) boardPreset = snapshot.boardPreset;
+
+  // Server state drives game screen transitions
+  if (snapshot.gamePhase === 'ingame') {
     buffer.push(snapshot);
+    if (clientScreen !== 'ingame' && clientScreen !== 'exit-confirm') {
+      clientScreen = 'ingame';
+    }
+  } else if (snapshot.gamePhase === 'lobby') {
+    // Returned to lobby from game (e.g. after exit confirm)
+    if (clientScreen === 'ingame' || clientScreen === 'exit-confirm') {
+      clientScreen = 'main-menu';
+    }
   }
 });
 
@@ -137,17 +196,18 @@ socket.on('game:hint-active', ({ pairId, symbolName }) => {
   console.log(`[Game] Hint active for pair ${pairId} (${symbolName})`);
 });
 
-// --- Input tracking ---
 const lastTurnDirection: (-1 | 0 | 1)[] = [0, 0];
 
-// --- Game Loop ---
 function gameLoop(): void {
-  if (currentPhase === 'lobby') {
-    // Render lobby
+  if (clientScreen === 'main-menu') {
+    mainMenuRenderer.render();
+  } else if (clientScreen === 'instructions') {
+    instructionsRenderer.render();
+  } else if (clientScreen === 'lobby') {
     const lobbyPlayers = latestSnapshot?.lobbyPlayers ?? [];
-    lobbyRenderer.render(lobbyPlayers);
+    lobbyRenderer.render(lobbyPlayers, boardPreset);
   } else {
-    // Send input
+    // ingame or exit-confirm — both render the game, confirm overlays on top
     for (let i = 0; i < joinedPlayers.size; i++) {
       const input = inputManager.poll(i);
       if (input && input.turnDirection !== lastTurnDirection[i]) {
@@ -156,10 +216,11 @@ function gameLoop(): void {
       }
     }
 
-    // Interpolate and render
     const snapshot = buffer.interpolate(Date.now());
-    if (snapshot) {
-      renderer.render(snapshot);
+    if (snapshot) renderer.render(snapshot);
+
+    if (clientScreen === 'exit-confirm') {
+      confirmRenderer.render('Exit to main menu?');
     }
   }
 
@@ -170,7 +231,6 @@ function gameLoop(): void {
 socket.connect();
 requestAnimationFrame(gameLoop);
 
-// Fullscreen on double-click
 container.addEventListener('dblclick', () => {
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen();

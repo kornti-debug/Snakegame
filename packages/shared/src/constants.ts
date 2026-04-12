@@ -42,17 +42,28 @@ export const PLAYER_COLORS = [
   '#AA44FF', // purple
 ];
 
-// Memory card game
+// Memory card game — legacy constants (kept for any code still importing directly).
+// Prefer BoardConfig / BOARD_PRESETS below.
 export const MEMORY_TILE_COLS = 2;          // grid cells per tile horizontally
 export const MEMORY_TILE_ROWS = 2;          // grid cells per tile vertically
-export const MEMORY_TILE_WIDTH = 240;       // GRID_CELL_WIDTH * MEMORY_TILE_COLS
-export const MEMORY_TILE_HEIGHT = 240;      // GRID_CELL_HEIGHT * MEMORY_TILE_ROWS
-export const MEMORY_TILE_GAP = 8;           // pixels between tiles
-export const MEMORY_BOARD_COLS = 5;         // tile positions per row
-export const MEMORY_BOARD_ROWS = 4;         // tile positions per column
-export const MEMORY_PAIR_COUNT = 10;        // number of pairs
-export const MEMORY_TILE_COUNT = 20;        // total tiles (2 * MEMORY_PAIR_COUNT)
-export const MEMORY_CAPTURE_THRESHOLD = 0.9; // 90% reveal to capture
+export const MEMORY_TILE_WIDTH = 240;
+export const MEMORY_TILE_HEIGHT = 240;
+export const MEMORY_TILE_GAP = 8;
+export const MEMORY_BOARD_COLS = 5;
+export const MEMORY_BOARD_ROWS = 4;
+export const MEMORY_PAIR_COUNT = 10;
+export const MEMORY_TILE_COUNT = 20;
+export const MEMORY_CAPTURE_THRESHOLD = 0.9;
+
+// Runtime-configurable board presets. Host picks one in the lobby.
+export const BOARD_PRESETS = {
+  small:  { cols: 4, rows: 3, pairCount: 6,  tileWidth: 240, tileHeight: 240, gap: 8, captureThreshold: 0.9 },
+  medium: { cols: 5, rows: 4, pairCount: 10, tileWidth: 240, tileHeight: 240, gap: 8, captureThreshold: 0.9 },
+  large:  { cols: 6, rows: 5, pairCount: 15, tileWidth: 200, tileHeight: 200, gap: 8, captureThreshold: 0.9 },
+  huge:   { cols: 7, rows: 6, pairCount: 20, tileWidth: 160, tileHeight: 160, gap: 8, captureThreshold: 0.9 },
+} as const;
+export const DEFAULT_BOARD_PRESET = 'medium';
+export const DEFAULT_BOARD_CONFIG = BOARD_PRESETS.medium;
 export const HINT_DURATION = 8_000;         // ms hint highlight lasts
 export const ROUND_DURATION_MEMORY = 120_000; // ms — longer rounds for memory
 

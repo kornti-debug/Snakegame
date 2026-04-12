@@ -75,6 +75,7 @@ export interface GameSnapshot {
   lobbyPlayers: LobbyPlayer[];
   memoryBoard: MemoryBoardState;
   hints: HintState[];
+  boardPreset: BoardPreset;
 }
 
 export interface BoidState {
@@ -127,6 +128,18 @@ export interface TwitchViewer {
   teamSnakeId: string;
   teamColor: string;
   credits: number;
+}
+
+export type BoardPreset = 'small' | 'medium' | 'large' | 'huge';
+
+export interface BoardConfig {
+  cols: number;
+  rows: number;
+  pairCount: number;
+  tileWidth: number;
+  tileHeight: number;
+  gap: number;
+  captureThreshold: number;
 }
 
 export interface HintState {

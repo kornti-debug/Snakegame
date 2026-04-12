@@ -1,4 +1,4 @@
-import type { GameSnapshot, RevealDelta, MemoryTile } from './game.js';
+import type { GameSnapshot, RevealDelta, MemoryTile, BoardPreset } from './game.js';
 
 export interface ServerToClientEvents {
   'game:snapshot': (snapshot: GameSnapshot) => void;
@@ -44,6 +44,7 @@ export interface ClientToServerEvents {
   'player:set-name': (playerIndex: number, name: string) => void;
   'lobby:start-game': () => void;
   'lobby:return': () => void;
+  'lobby:set-config': (payload: { preset: BoardPreset }) => void;
 }
 
 export interface InterServerEvents {}

@@ -1,4 +1,4 @@
-import type { MemoryTile, MemoryPair, MemoryBoardState, HintState } from '@snakegame/shared';
+import type { MemoryTile, MemoryPair, MemoryBoardState, HintState, BoardConfig } from '@snakegame/shared';
 import type { Snake } from '../entities/Snake.js';
 import type { RevealSystem } from './RevealSystem.js';
 import type { SymbolDef } from './SymbolGenerator.js';
@@ -6,11 +6,7 @@ import {
   REVEAL_BLOCK_SIZE,
   REVEAL_GRID_WIDTH,
   REVEAL_GRID_HEIGHT,
-  MEMORY_TILE_WIDTH,
-  MEMORY_TILE_HEIGHT,
-  MEMORY_PAIR_COUNT,
-  MEMORY_TILE_COUNT,
-  MEMORY_CAPTURE_THRESHOLD,
+  DEFAULT_BOARD_CONFIG,
   HINT_DURATION,
 } from '@snakegame/shared';
 import { generateTileSlots } from '@snakegame/shared';
@@ -30,6 +26,11 @@ export class MemoryBoardSystem {
   private pairScores = new Map<string, number>(); // snakeId → matched pair count
   private hints: HintState[] = [];
   private pendingEvents: MemoryBoardEvent[] = [];
+  private config: BoardConfig = DEFAULT_BOARD_CONFIG;
+
+  setConfig(cfg: BoardConfig): void {
+    this.config = cfg;
+  }
 
   // Lookup table: reveal grid block → tileId+1 (0 = no tile)
   private blockToTile!: Uint8Array;
@@ -47,8 +48,12 @@ export class MemoryBoardSystem {
     this.hints = [];
     this.pendingEvents = [];
 
-    // Get tile slot positions (5x4 = 20 slots)
-    const slots = generateTileSlots();
+    const cfg = this.config;
+    const pairCount = cfg.pairCount;
+    const tileCount = pairCount * 2;
+
+    // Get tile slot positions sized by config (will have >= tileCount slots)
+    const slots = generateTileSlots(cfg);
 
     // Shuffle slots for random placement
     const shuffledSlots = [...slots];
@@ -59,13 +64,13 @@ export class MemoryBoardSystem {
 
     // Ensure we have enough symbols (repeat if needed)
     const usedSymbols: SymbolDef[] = [];
-    for (let i = 0; i < MEMORY_PAIR_COUNT; i++) {
+    for (let i = 0; i < pairCount; i++) {
       usedSymbols.push(symbols[i % symbols.length]);
     }
 
     // Create tiles: 2 tiles per pair
     let tileId = 0;
-    for (let pairId = 0; pairId < MEMORY_PAIR_COUNT; pairId++) {
+    for (let pairId = 0; pairId < pairCount; pairId++) {
       const symbol = usedSymbols[pairId];
       const tileA = tileId++;
       const tileB = tileId++;
@@ -80,8 +85,8 @@ export class MemoryBoardSystem {
         imageUrl: symbol.imageUrl,
         x: posA.x,
         y: posA.y,
-        width: MEMORY_TILE_WIDTH,
-        height: MEMORY_TILE_HEIGHT,
+        width: cfg.tileWidth,
+        height: cfg.tileHeight,
         revealPercent: 0,
         capturedBy: null,
         capturedColor: null,
@@ -95,8 +100,8 @@ export class MemoryBoardSystem {
         imageUrl: symbol.imageUrl,
         x: posB.x,
         y: posB.y,
-        width: MEMORY_TILE_WIDTH,
-        height: MEMORY_TILE_HEIGHT,
+        width: cfg.tileWidth,
+        height: cfg.tileHeight,
         revealPercent: 0,
         capturedBy: null,
         capturedColor: null,
@@ -117,7 +122,7 @@ export class MemoryBoardSystem {
 
     // Initialize per-tile counters
     this.tileSnakeReveals = this.tiles.map(() => new Map<string, number>());
-    this.tileRevealedCounts = new Array(MEMORY_TILE_COUNT).fill(0);
+    this.tileRevealedCounts = new Array(tileCount).fill(0);
   }
 
   private buildLookupTable(): void {
@@ -178,7 +183,7 @@ export class MemoryBoardSystem {
         tile.revealBySnake[sid] = count;
       }
 
-      if (percent < MEMORY_CAPTURE_THRESHOLD) continue;
+      if (percent < this.config.captureThreshold) continue;
 
       // Find who revealed the most blocks in this tile
       let maxSnakeId: string | null = null;

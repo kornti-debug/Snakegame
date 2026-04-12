@@ -1,5 +1,5 @@
 import type { GameSnapshot } from '@snakegame/shared';
-import { ARENA_WIDTH, ARENA_HEIGHT, MEMORY_PAIR_COUNT } from '@snakegame/shared';
+import { ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
 
 export class UILayer {
   readonly canvas: HTMLCanvasElement;
@@ -32,10 +32,11 @@ export class UILayer {
     this.drawScores(ctx, snapshot);
 
     // Match progress (top-right)
+    const totalPairs = snapshot.memoryBoard.pairs.length;
     const matchedCount = snapshot.memoryBoard.pairs.filter(p => p.matched).length;
     ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'right';
-    this.textWithShadow(ctx, `Pairs: ${matchedCount}/${MEMORY_PAIR_COUNT}`, ARENA_WIDTH - 20, 34, '#FFD700');
+    this.textWithShadow(ctx, `Pairs: ${matchedCount}/${totalPairs}`, ARENA_WIDTH - 20, 34, '#FFD700');
 
     // Reveal percentage (top-right, below pairs)
     const pct = snapshot.revealPercentage.toFixed(1);

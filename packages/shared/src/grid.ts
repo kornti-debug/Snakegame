@@ -1,9 +1,7 @@
-import type { Vector2D } from './types/game.js';
+import type { Vector2D, BoardConfig } from './types/game.js';
 import {
   ARENA_WIDTH, ARENA_HEIGHT,
-  MEMORY_BOARD_COLS, MEMORY_BOARD_ROWS,
-  MEMORY_TILE_WIDTH, MEMORY_TILE_HEIGHT,
-  MEMORY_TILE_GAP,
+  DEFAULT_BOARD_CONFIG,
 } from './constants.js';
 
 // Grid: 16 columns (A-P) × 9 rows (1-9) = 144 cells
@@ -45,13 +43,12 @@ export function isValidCell(cell: string): boolean {
 
 // --- Memory tile layout ---
 
-/** Get the pixel top-left position for a tile slot (col 0..4, row 0..3) */
-export function tileSlotToPixel(col: number, row: number): Vector2D {
-  // Center the tile grid (with gaps) within the arena
-  const stepX = MEMORY_TILE_WIDTH + MEMORY_TILE_GAP;
-  const stepY = MEMORY_TILE_HEIGHT + MEMORY_TILE_GAP;
-  const totalWidth = MEMORY_BOARD_COLS * stepX - MEMORY_TILE_GAP;
-  const totalHeight = MEMORY_BOARD_ROWS * stepY - MEMORY_TILE_GAP;
+/** Get the pixel top-left position for a tile slot given a board config */
+export function tileSlotToPixel(col: number, row: number, cfg: BoardConfig = DEFAULT_BOARD_CONFIG): Vector2D {
+  const stepX = cfg.tileWidth + cfg.gap;
+  const stepY = cfg.tileHeight + cfg.gap;
+  const totalWidth = cfg.cols * stepX - cfg.gap;
+  const totalHeight = cfg.rows * stepY - cfg.gap;
   const offsetX = (ARENA_WIDTH - totalWidth) / 2;
   const offsetY = (ARENA_HEIGHT - totalHeight) / 2;
   return {
@@ -60,12 +57,12 @@ export function tileSlotToPixel(col: number, row: number): Vector2D {
   };
 }
 
-/** Generate all 20 tile slot positions (5x4 grid, centered in arena) */
-export function generateTileSlots(): Vector2D[] {
+/** Generate all tile slot positions for the given config (row-major). */
+export function generateTileSlots(cfg: BoardConfig = DEFAULT_BOARD_CONFIG): Vector2D[] {
   const slots: Vector2D[] = [];
-  for (let row = 0; row < MEMORY_BOARD_ROWS; row++) {
-    for (let col = 0; col < MEMORY_BOARD_COLS; col++) {
-      slots.push(tileSlotToPixel(col, row));
+  for (let row = 0; row < cfg.rows; row++) {
+    for (let col = 0; col < cfg.cols; col++) {
+      slots.push(tileSlotToPixel(col, row, cfg));
     }
   }
   return slots;
