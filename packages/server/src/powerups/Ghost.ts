@@ -6,6 +6,7 @@ export const Ghost: PowerUpDefinition = {
   displayName: 'Ghost',
   spawnWeight: 5,
   duration: GHOST_DURATION,
+  kind: 'active',
   onApply(snake) {
     snake.ghosting = true;
   },

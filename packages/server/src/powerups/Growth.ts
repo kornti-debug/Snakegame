@@ -5,6 +5,7 @@ export const Growth: PowerUpDefinition = {
   displayName: 'Growth',
   spawnWeight: 3, // rare — permanent effect
   duration: 0, // instant
+  kind: 'passive',
   onApply(snake) {
     snake.revealRadius *= 1.2; // +20%, stacks
   },

@@ -6,6 +6,7 @@ export const WideTrail: PowerUpDefinition = {
   displayName: 'Wide Trail',
   spawnWeight: 8,
   duration: WIDE_TRAIL_DURATION,
+  kind: 'active',
   onApply(snake) {
     snake.revealRadius = REVEAL_BRUSH_RADIUS * WIDE_TRAIL_MULTIPLIER;
   },

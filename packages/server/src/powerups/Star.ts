@@ -6,6 +6,7 @@ export const Star: PowerUpDefinition = {
   displayName: 'Star',
   spawnWeight: 3, // rare
   duration: STAR_DURATION,
+  kind: 'active',
   onApply(snake) {
     snake.starred = true;
     snake.ghosting = true; // also ghost while starred (immune to walls/snakes)

@@ -1,10 +1,16 @@
 import type { Snake } from '../entities/Snake.js';
 
+export type PowerUpKind = 'active' | 'passive';
+
 export interface PowerUpDefinition {
   id: string;
   displayName: string;
   spawnWeight: number;
   duration: number; // ms, 0 = instant
+  /** 'active' powerups queue into the snake's item slot and must be
+   *  manually activated. 'passive' powerups apply instantly on pickup and
+   *  stack forever (no expiry timer). */
+  kind: PowerUpKind;
   onApply(snake: Snake): void;
   onExpire(snake: Snake): void;
   renderHint: { color: string; shape: string };

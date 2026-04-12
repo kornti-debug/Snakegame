@@ -6,6 +6,7 @@ export const Predator: PowerUpDefinition = {
   displayName: 'Predator',
   spawnWeight: 5,
   duration: PREDATOR_DURATION,
+  kind: 'active',
   onApply(snake) {
     snake.predator = true;
   },

@@ -22,6 +22,8 @@ export interface SnakeState {
   predator: boolean;          // boids flee with larger radius
   team: number | null;        // team index (see TEAM_COLORS); null = solo
   playerIndex: number;        // global lobby slot (0..MAX_PLAYERS-1)
+  itemSlot: string | null;    // queued active powerup id (slot), ready to activate
+  activeEffect: string | null;// id of the currently-running active effect (null if none)
   // Active effect drain: 1.0 = just started, 0.0 = expired. Null = no effect.
   effectDrain: Record<string, number>;  // effectId → remaining fraction (0..1)
 }

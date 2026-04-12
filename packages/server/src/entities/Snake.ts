@@ -31,6 +31,8 @@ export class Snake {
   predator: boolean;
   team: number | null = null;
   playerIndex = 0;
+  itemSlot: string | null = null;      // queued active powerup id (if any)
+  activeEffect: string | null = null;  // currently-running active powerup id
   effectDrain: Record<string, number> = {};
   turnDirection: -1 | 0 | 1 = 0;
   boosting = false;
@@ -171,6 +173,8 @@ export class Snake {
       predator: this.predator,
       team: this.team,
       playerIndex: this.playerIndex,
+      itemSlot: this.itemSlot,
+      activeEffect: this.activeEffect,
       effectDrain: this.effectDrain,
     };
   }
@@ -188,6 +192,8 @@ export class Snake {
     this.predator = false;
     this.ghosting = false;
     this.speed = SNAKE_SPEED;
+    this.itemSlot = null;
+    this.activeEffect = null;
   }
 
   respawn(pos: Vector2D, angle: number): void {

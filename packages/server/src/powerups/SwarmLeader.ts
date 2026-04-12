@@ -6,6 +6,7 @@ export const SwarmLeader: PowerUpDefinition = {
   displayName: 'Swarm Leader',
   spawnWeight: 4,
   duration: SWARM_LEADER_DURATION,
+  kind: 'active',
   onApply(snake) {
     snake.swarmLeader = true;
   },

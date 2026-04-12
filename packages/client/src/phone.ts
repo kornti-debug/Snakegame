@@ -40,6 +40,57 @@ const infoTeamDot = document.getElementById('info-team-dot') as HTMLElement;
 const infoTeamName = document.getElementById('info-team-name') as HTMLElement;
 const infoScore = document.getElementById('info-score') as HTMLElement;
 
+// Item slot overlay
+const slotCard = document.getElementById('slot-card') as HTMLButtonElement;
+const slotName = document.getElementById('slot-name') as HTMLElement;
+const slotIcon = slotCard.querySelector('.icon') as HTMLElement;
+
+// Known active powerup metadata for the slot overlay. Icons inherit
+// `currentColor` so the color comes from the card's computed color.
+const POWERUP_META: Record<string, { label: string; color: string }> = {
+  'speed-boost':  { label: 'Speed',   color: '#ffaa00' },
+  'wide-trail':   { label: 'Wide',    color: '#44ffaa' },
+  'ghost':        { label: 'Ghost',   color: '#aaaaff' },
+  'star':         { label: 'Star',    color: '#FFD700' },
+  'swarm-leader': { label: 'Swarm',   color: '#44FFAA' },
+  'predator':     { label: 'Predator',color: '#FF4466' },
+};
+
+function updateSlotCard(snapshot: GameSnapshot): void {
+  if (playerIndex === null) return;
+  const me = snapshot.snakes.find(s => s.playerIndex === playerIndex);
+  if (!me) {
+    slotCard.classList.remove('armed', 'running');
+    slotName.textContent = 'empty';
+    slotIcon.style.color = 'rgba(255,255,255,0.35)';
+    return;
+  }
+  if (me.activeEffect) {
+    const meta = POWERUP_META[me.activeEffect];
+    slotCard.classList.remove('armed');
+    slotCard.classList.add('running');
+    slotName.textContent = meta?.label ?? me.activeEffect;
+    slotIcon.style.color = meta?.color ?? '#FFD700';
+  } else if (me.itemSlot) {
+    const meta = POWERUP_META[me.itemSlot];
+    slotCard.classList.add('armed');
+    slotCard.classList.remove('running');
+    slotName.textContent = meta?.label ?? me.itemSlot;
+    slotIcon.style.color = meta?.color ?? '#44ff44';
+  } else {
+    slotCard.classList.remove('armed', 'running');
+    slotName.textContent = 'empty';
+    slotIcon.style.color = 'rgba(255,255,255,0.35)';
+  }
+}
+
+slotCard.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (playerIndex === null) return;
+  // Server silently no-ops when there's nothing to activate.
+  socket.emit('input:activate', playerIndex);
+});
+
 // Arena follow-cam
 const arenaCanvas = document.getElementById('arena-canvas') as HTMLCanvasElement;
 const arenaMsg = document.getElementById('arena-msg') as HTMLElement;
@@ -216,6 +267,7 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
   if (screen === 'settings') renderColorRow();
 
   updateInfoColumn(snapshot);
+  updateSlotCard(snapshot);
 });
 
 function renderReadyBtn(): void {

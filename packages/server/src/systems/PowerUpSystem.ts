@@ -21,6 +21,7 @@ interface ActiveEffect {
   snakeId: string;
   definitionId: string;
   remainingMs: number;
+  durationMs: number;
 }
 
 export class PowerUpSystem {
@@ -59,16 +60,14 @@ export class PowerUpSystem {
 
         if (distanceSq(snake.segments[0], powerUp.position) < collectRadiusSq) {
           powerUp.collected = true;
-          console.log(`[PowerUp] ${snake.name} collected ${powerUp.definition.id}, speed before=${snake.speed}`);
-          powerUp.definition.onApply(snake);
-          console.log(`[PowerUp] ${snake.name} speed after=${snake.speed}, segments=${snake.segments.length}`);
-
-          if (powerUp.definition.duration > 0) {
-            this.activeEffects.push({
-              snakeId: snake.id,
-              definitionId: powerUp.definition.id,
-              remainingMs: powerUp.definition.duration,
-            });
+          const def = powerUp.definition;
+          if (def.kind === 'passive') {
+            // Passive: apply instantly, stacks forever, no timer.
+            def.onApply(snake);
+          } else {
+            // Active: queue in the snake's item slot (replaces any pending one).
+            // Not applied until the player activates it.
+            snake.itemSlot = def.id;
           }
           break;
         }
@@ -89,11 +88,46 @@ export class PowerUpSystem {
 
         if (snake && def) {
           def.onExpire(snake);
+          if (snake.activeEffect === effect.definitionId) snake.activeEffect = null;
         }
 
         this.activeEffects.splice(i, 1);
       }
     }
+  }
+
+  /** Player pressed the activate button. If they have a slotted active
+   *  powerup, cancel any currently-running active effect on that snake
+   *  (only one at a time per user's design) and start the slotted one. */
+  activateSlot(snake: Snake): boolean {
+    if (!snake.alive) return false;
+    if (!snake.itemSlot) return false;
+    const def = this.registry.get(snake.itemSlot);
+    if (!def || def.kind !== 'active' || def.duration <= 0) {
+      snake.itemSlot = null;
+      return false;
+    }
+
+    // Cancel current active effect (if any) on this snake.
+    for (let i = this.activeEffects.length - 1; i >= 0; i--) {
+      const e = this.activeEffects[i];
+      if (e.snakeId !== snake.id) continue;
+      const prev = this.registry.get(e.definitionId);
+      if (prev) prev.onExpire(snake);
+      this.activeEffects.splice(i, 1);
+    }
+
+    // Start the slotted effect.
+    def.onApply(snake);
+    this.activeEffects.push({
+      snakeId: snake.id,
+      definitionId: def.id,
+      remainingMs: def.duration,
+      durationMs: def.duration,
+    });
+    snake.activeEffect = def.id;
+    snake.itemSlot = null;
+    return true;
   }
 
   private spawnRandom(): void {
@@ -134,7 +168,10 @@ export class PowerUpSystem {
       const snake = snakes.find(s => s.id === effect.snakeId);
       const def = this.registry.get(effect.definitionId);
       if (snake && def) def.onExpire(snake);
+      if (snake) snake.activeEffect = null;
     }
     this.activeEffects = [];
+    // Also clear any queued item slots — new round = clean slate.
+    for (const s of snakes) s.itemSlot = null;
   }
 }

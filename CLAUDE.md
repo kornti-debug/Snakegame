@@ -47,7 +47,7 @@ npm run dev:client
 - **Memory card game** mechanic (configurable board: small 4×3/6 pairs → huge 7×6/20 pairs, 90% capture threshold, same-snake matching)
 - Per-snake per-tile reveal tracking with visual breakdown bars
 - Round management (waiting → playing → ended → repeat, 120s rounds)
-- Power-up system: SpeedBoost, WideTrail, Ghost, Star, SwarmLeader, Predator (plugin registry)
+- Power-up system with **slot mechanic**: `PowerUpDefinition.kind` is `'active'` or `'passive'`. Passives (Growth) apply instantly and stack. Actives (SpeedBoost, WideTrail, Ghost, Star, SwarmLeader, Predator) queue into `snake.itemSlot` on pickup — a new pickup overwrites the pending one. Player taps the phone's slot overlay to fire `input:activate`, which cancels any currently-running active effect on that snake and starts the slotted one. Only one active effect per snake at a time.
 - **AI boid swarm** system (flocking with alpha/follower hierarchy, flee/follow behaviors)
 - HUD with round timer, pair scores, match counter, powerup legend, winner overlay
 - State interpolation (30Hz server → 60fps client, includes boid interpolation)

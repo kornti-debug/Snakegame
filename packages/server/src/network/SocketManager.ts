@@ -107,6 +107,11 @@ export class SocketManager {
         if (snake) snake.boosting = active;
       });
 
+      socket.on('input:activate', (playerIndex) => {
+        const snake = this.room.getSnake(socket.id, playerIndex);
+        if (snake) this.room.powerUpSystem.activateSlot(snake);
+      });
+
       socket.on('disconnect', () => {
         console.log(`[Socket] Disconnected: ${socket.id}`);
         this.room.removeAllPlayers(socket.id);

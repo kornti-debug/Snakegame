@@ -6,6 +6,7 @@ export const SpeedBoost: PowerUpDefinition = {
   displayName: 'Speed Boost',
   spawnWeight: 10,
   duration: SPEED_BOOST_DURATION,
+  kind: 'active',
   onApply(snake) {
     snake.speed = SNAKE_SPEED * SPEED_BOOST_MULTIPLIER;
   },

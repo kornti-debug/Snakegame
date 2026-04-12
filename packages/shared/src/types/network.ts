@@ -39,6 +39,7 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   'input:turn': (playerIndex: number, direction: -1 | 0 | 1) => void;
   'input:boost': (playerIndex: number, active: boolean) => void;
+  'input:activate': (playerIndex: number) => void;
   'player:join': (payload: { name: string; playerIndex: number }) => void;
   'player:leave': (playerIndex: number) => void;
   'player:ready': (playerIndex: number) => void;

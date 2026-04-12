@@ -284,11 +284,16 @@
     body.controller-mode #status {
       position: absolute;
       top: 0; left: 0; right: 0;
-      background: rgba(10, 12, 28, 0.55);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      border-bottom: 1px solid rgba(68, 170, 255, 0.25);
+      background: linear-gradient(to bottom, rgba(10, 12, 28, 0.55), rgba(10, 12, 28, 0));
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      border-bottom: none;
       z-index: 10;
+    }
+    /* Legibility assist so the HUD stays readable over any arena background. */
+    body.controller-mode #status,
+    body.controller-mode #hud-bar {
+      text-shadow: 0 1px 2px rgba(0,0,0,0.85);
     }
     body.controller-mode #controller-screen {
       position: absolute; inset: 0;
@@ -324,6 +329,60 @@
     }
     body.controller-mode #pad-left { left: 0; border-right-width: 1px; }
     body.controller-mode #pad-right { right: 0; border-left-width: 1px; }
+
+    /* ---- Item slot overlay (center-bottom of canvas) ---- */
+    body.controller-mode #slot-overlay {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+    #slot-card {
+      min-width: 96px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(10, 12, 28, 0.55);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 2px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.4);
+      text-align: center;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      pointer-events: auto;
+      transition: transform 0.08s, box-shadow 0.12s, border-color 0.12s;
+    }
+    #slot-card .icon {
+      display: block;
+      width: 28px; height: 28px;
+      margin: 0 auto 4px;
+      border-radius: 6px;
+      background: currentColor;
+      opacity: 0.4;
+    }
+    #slot-card .name {
+      font-weight: bold;
+      font-size: 13px;
+      color: inherit;
+    }
+    #slot-card.armed {
+      color: #44ff44;
+      border-color: #44ff44;
+      box-shadow: 0 0 18px rgba(68, 255, 68, 0.45);
+    }
+    #slot-card.armed .icon { opacity: 0.9; }
+    #slot-card.armed:active { transform: scale(0.95); }
+    #slot-card.running {
+      color: #FFD700;
+      border-color: rgba(255, 215, 0, 0.7);
+    }
+    #slot-card.running .icon { opacity: 0.9; }
     #arena-msg {
       position: absolute;
       inset: 0;
@@ -409,6 +468,12 @@
         <div id="arena-wrap">
           <canvas id="arena-canvas"></canvas>
           <div id="arena-msg">waiting for game to start…</div>
+          <div id="slot-overlay">
+            <button id="slot-card" type="button">
+              <span class="icon"></span>
+              <span class="name" id="slot-name">empty</span>
+            </button>
+          </div>
         </div>
       </div>
       <div class="pad" id="pad-right">▶</div>
