@@ -163,8 +163,12 @@ export class SocketManager {
   }
 
   broadcastSnapshot(): void {
-    // Emit pending game events to both game clients and TD
-    for (const event of this.room.pendingEvents) {
+    // Drain the pending-event queue. GameRoom.update no longer clears it
+    // (so events pushed outside the tick, e.g. from startGame, aren't lost);
+    // draining here on each broadcast keeps them one-shot as intended.
+    const pending = this.room.pendingEvents;
+    this.room.pendingEvents = [];
+    for (const event of pending) {
       if (event.type === 'round-start') {
         this.io.emit('game:round-start', {
           roundNumber: event.roundNumber,

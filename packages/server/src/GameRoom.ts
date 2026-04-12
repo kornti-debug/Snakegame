@@ -293,7 +293,9 @@ export class GameRoom {
 
   update(dt: number): void {
     this.tick++;
-    this.pendingEvents = [];
+    // pendingEvents is cleared by broadcastSnapshot AFTER emit — not here —
+    // so events queued between ticks (e.g. round-start from startGame)
+    // survive until the next broadcast.
 
     if (this.gamePhase !== 'ingame') return;
     // When paused, freeze everything — round timer, movement, reveals, respawns.
