@@ -56,7 +56,8 @@ npm run dev:client
 - Lobby/menu system — main menu + instructions screen + exit confirm dialog, ambient flocking boids behind menus
 - Board preset picker in lobby (small / medium / large / huge) via keys 1-4 or [ / ]
 - Title: **SNAKE MEMORY**
-- **Phone-only input model**: the projector is host-only — no local keyboard players. All players join by scanning the lobby QR code (`/phone.html`). Phone has three screens: Join (name entry), Settings (in-lobby: name / color / team picker), Controller (tap-and-hold left/right zones while the game is running). Auto-switches between Settings ↔ Controller based on `gamePhase`. `MAX_PLAYERS` = 10.
+- **Phone-only input model**: the projector is host-only — no local keyboard players. All players join by scanning the lobby QR code (`/phone.html`). Phone has three screens: Join (name entry, portrait OK), Settings (in-lobby: name / color / team picker + Ready button, landscape), Controller (left/right pads + follow-cam canvas of the arena centered on the player's snake, landscape). Auto-switches between Settings ↔ Controller based on `gamePhase`. `MAX_PLAYERS` = 10.
+- **Phone follow-cam**: `PhoneArenaRenderer` reuses the projector's `BackgroundLayer` / `RevealLayer` / `TileOverlayLayer` / `GameLayer` classes to composite a 1920×1080 arena buffer, then blits a camera-centered window to the visible canvas. Camera follows the phone's own snake (matched via `SnakeState.playerIndex`), clamped to arena bounds. Zoom is fixed at `CAMERA_VIEW_HEIGHT = 540` arena pixels tall; width derived from canvas aspect.
 - **Teams**: `LobbyPlayer.team` / `SnakeState.team` (null = solo) + `player:set-team` event. 4 team colors defined in `TEAM_COLORS` / `TEAM_NAMES`. Shown as a colored dot on the lobby player row and as a **team-colored halo ring around the snake's head** in-game. Teams don't affect gameplay yet (reserved for a follow-up).
 - **Host controls (mouse + a few keys)**: lobby is mouse-driven — click a preset card to pick the board, click the red X on a player row to kick, click "START GAME" (or press Enter). ESC in-game pauses + opens a dialog (R resume, Y exit, ESC/N resume). ESC in the lobby returns to the main menu. Phones can't trigger pause/kick (server gates via `phoneSockets`).
 - **External REST API** (`/api/external/*`) for Touch Designer integration
@@ -74,8 +75,7 @@ npm run dev:client
 - Stream overlay data
 - Powerup slot system (1 active slot + stacking passives, manual activation button, "Steering" passive)
 - Input expansion: gamepad auto-detect, MIDI provider
-- Phone-join Phase 2: on-phone game view (slither.io-style follow camera), personal HUD, active-powerup button
-- Phone-join Phase 3: larger arena enabled by per-player phone view
+- Phone-join Phase 2+: larger arena enabled by per-player phone view; overlay pad buttons on top of the arena canvas instead of as side columns; active-powerup button (tied to future powerup slot system).
 
 ## External API (Touch Designer)
 

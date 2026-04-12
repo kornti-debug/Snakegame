@@ -30,6 +30,7 @@ export class Snake {
   swarmLeader: boolean;
   predator: boolean;
   team: number | null = null;
+  playerIndex = 0;
   effectDrain: Record<string, number> = {};
   turnDirection: -1 | 0 | 1 = 0;
   boosting = false;
@@ -169,6 +170,7 @@ export class Snake {
       swarmLeader: this.swarmLeader,
       predator: this.predator,
       team: this.team,
+      playerIndex: this.playerIndex,
       effectDrain: this.effectDrain,
     };
   }

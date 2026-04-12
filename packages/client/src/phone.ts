@@ -1,6 +1,7 @@
 import { createSocket } from './network/ClientSocket.js';
-import type { GameSnapshot, LobbyPlayer } from '@snakegame/shared';
-import { PLAYER_COLORS, TEAM_COLORS, TEAM_NAMES } from '@snakegame/shared';
+import type { GameSnapshot, LobbyPlayer, MemoryTile, RevealDelta } from '@snakegame/shared';
+import { PLAYER_COLORS, TEAM_COLORS, TEAM_NAMES, ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
+import { PhoneArenaRenderer } from './rendering/PhoneArenaRenderer.js';
 
 // Phone client. Three screens:
 //   1. join     — enter name, tap Join
@@ -38,6 +39,16 @@ const infoName = document.getElementById('info-name') as HTMLElement;
 const infoTeamDot = document.getElementById('info-team-dot') as HTMLElement;
 const infoTeamName = document.getElementById('info-team-name') as HTMLElement;
 const infoScore = document.getElementById('info-score') as HTMLElement;
+
+// Arena follow-cam
+const arenaCanvas = document.getElementById('arena-canvas') as HTMLCanvasElement;
+const arenaMsg = document.getElementById('arena-msg') as HTMLElement;
+const arenaRenderer = new PhoneArenaRenderer();
+// How much of the arena is visible around the player (arena pixels). The
+// visible canvas aspect ratio determines the actual width — we pick the
+// vertical extent and compute width from that.
+const CAMERA_VIEW_HEIGHT = 540;
+let lastSnapshot: GameSnapshot | null = null;
 
 let playerIndex: number | null = null;
 let myName = '';
@@ -156,7 +167,19 @@ socket.on('phone:join-error', ({ reason }) => {
   show('error');
 });
 
+socket.on('game:round-start', ({ tiles }: { roundNumber: number; tiles: MemoryTile[] }) => {
+  arenaRenderer.resetRound();
+  if (tiles && tiles.length > 0) {
+    arenaRenderer.loadTileImages(tiles).catch(() => {});
+  }
+});
+
+socket.on('game:reveal-update', (delta: RevealDelta) => {
+  arenaRenderer.applyRevealDelta(delta);
+});
+
 socket.on('game:snapshot', (snapshot: GameSnapshot) => {
+  lastSnapshot = snapshot;
   if (playerIndex === null) return;
   // Swap between settings (while lobby) and controller (while ingame).
   if (snapshot.gamePhase === 'ingame' && screen !== 'controller') {
@@ -320,6 +343,50 @@ document.body.addEventListener('touchmove', (e) => e.preventDefault(), { passive
 // Initialize body class for the starting Join screen so portrait mode is
 // allowed immediately on page load (before any show() call).
 show('join');
+
+// --- Arena follow-cam render loop ---
+// Keeps the visible canvas sized to its displayed box (respecting DPR) and
+// draws a camera window each frame while we're in the Controller screen.
+function resizeArenaCanvas(): void {
+  const rect = arenaCanvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const targetW = Math.max(1, Math.floor(rect.width * dpr));
+  const targetH = Math.max(1, Math.floor(rect.height * dpr));
+  if (arenaCanvas.width !== targetW) arenaCanvas.width = targetW;
+  if (arenaCanvas.height !== targetH) arenaCanvas.height = targetH;
+}
+
+function arenaFrame(): void {
+  requestAnimationFrame(arenaFrame);
+  if (screen !== 'controller' || !lastSnapshot || playerIndex === null) return;
+
+  resizeArenaCanvas();
+
+  // Camera target: my snake's head if alive / present, otherwise arena center.
+  const mySnake = lastSnapshot.snakes.find(s => s.playerIndex === playerIndex);
+  let cx = ARENA_WIDTH / 2;
+  let cy = ARENA_HEIGHT / 2;
+  if (mySnake && mySnake.segments.length > 0) {
+    cx = mySnake.segments[0].x;
+    cy = mySnake.segments[0].y;
+  }
+
+  const aspect = arenaCanvas.width / arenaCanvas.height;
+  const viewH = CAMERA_VIEW_HEIGHT;
+  const viewW = viewH * aspect;
+
+  arenaRenderer.render(lastSnapshot, arenaCanvas, cx, cy, viewW, viewH);
+
+  // Hide "waiting" overlay once the game is actually running.
+  const playing = lastSnapshot.round.phase === 'playing';
+  arenaMsg.style.display = playing ? 'none' : 'flex';
+  if (!playing) {
+    arenaMsg.textContent = lastSnapshot.round.phase === 'waiting'
+      ? `round starting in ${Math.ceil(lastSnapshot.round.timeRemainingMs / 1000)}…`
+      : 'round ended';
+  }
+}
+requestAnimationFrame(arenaFrame);
 
 socket.connect();
 setStatus('Connecting…', false);

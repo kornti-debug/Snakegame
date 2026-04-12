@@ -21,6 +21,7 @@ export interface SnakeState {
   swarmLeader: boolean;       // boids follow this snake
   predator: boolean;          // boids flee with larger radius
   team: number | null;        // team index (see TEAM_COLORS); null = solo
+  playerIndex: number;        // global lobby slot (0..MAX_PLAYERS-1)
   // Active effect drain: 1.0 = just started, 0.0 = expired. Null = no effect.
   effectDrain: Record<string, number>;  // effectId → remaining fraction (0..1)
 }

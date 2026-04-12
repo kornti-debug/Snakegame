@@ -202,6 +202,7 @@ export class GameRoom {
       const { pos, angle } = this.getSpawnPoint();
       const snake = new Snake(lobbyPlayer.name, lobbyPlayer.color, pos, angle);
       snake.team = lobbyPlayer.team;
+      snake.playerIndex = lobbyPlayer.index;
 
       if (!this.players.has(socketId)) {
         this.players.set(socketId, new Map());
