@@ -70,7 +70,7 @@ export class Renderer {
     // Update snake color cache from snapshot
     const colorMap = new Map(snapshot.snakes.map(s => [s.id, s.color]));
     this.tileOverlayLayer.setSnakeColors(colorMap);
-    this.tileOverlayLayer.render(snapshot.memoryBoard, snapshot.hints);
+    this.tileOverlayLayer.render(snapshot.memoryBoard, snapshot.hints, preReveal);
     ctx.drawImage(this.tileOverlayLayer.canvas, 0, 0);
 
     // Layer 4: Game objects (snakes, powerups, obstacles)

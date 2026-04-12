@@ -3,7 +3,9 @@ import { ROUND_DURATION_MEMORY, ROUND_WAIT_TIME, ROUND_END_DISPLAY_TIME } from '
 
 export class RoundManager {
   phase: RoundPhase = 'waiting';
-  roundNumber = 0;
+  /** Upcoming round number during 'waiting', current round during 'playing',
+   *  just-finished round during 'ended'. Starts at 1 for the first round. */
+  roundNumber = 1;
   timeRemainingMs = ROUND_WAIT_TIME;
   private phaseJustChanged = false;
 
@@ -24,6 +26,7 @@ export class RoundManager {
         case 'ended':
           this.phase = 'waiting';
           this.timeRemainingMs = ROUND_WAIT_TIME;
+          this.roundNumber++;
           this.phaseJustChanged = true;
           return 'waiting';
       }
@@ -33,7 +36,7 @@ export class RoundManager {
   }
 
   startRound(): void {
-    this.roundNumber++;
+    // roundNumber is already set when we entered 'waiting' — don't bump again.
     this.phase = 'playing';
     this.timeRemainingMs = ROUND_DURATION_MEMORY;
     this.phaseJustChanged = true;

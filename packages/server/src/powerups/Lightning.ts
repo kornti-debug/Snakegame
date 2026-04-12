@@ -11,12 +11,14 @@ export const Lightning: PowerUpDefinition = {
   kind: 'active',
   onApply(_self, others) {
     for (const o of others) {
+      if (o.starred) continue;
       o.shrunken = true;
       o.radius = SNAKE_RADIUS * 0.5;
     }
   },
   onExpire(_self, others) {
     for (const o of others) {
+      if (!o.shrunken) continue;
       o.shrunken = false;
       o.radius = SNAKE_RADIUS;
     }

@@ -60,7 +60,8 @@ export class PhoneArenaRenderer {
 
     const colorMap = new Map(snapshot.snakes.map(s => [s.id, s.color]));
     this.tileOverlayLayer.setSnakeColors(colorMap);
-    this.tileOverlayLayer.render(snapshot.memoryBoard, snapshot.hints);
+    const preReveal = snapshot.round.phase === 'waiting';
+    this.tileOverlayLayer.render(snapshot.memoryBoard, snapshot.hints, preReveal);
     bctx.drawImage(this.tileOverlayLayer.canvas, 0, 0);
 
     this.gameLayer.render(snapshot);

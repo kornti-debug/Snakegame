@@ -11,15 +11,15 @@ export const TimeFreeze: PowerUpDefinition = {
   kind: 'active',
   onApply(_self, others) {
     for (const o of others) {
+      if (o.starred) continue; // Star is invincible — no debuff can land
       o.frozen = true;
       o.speed = 0;
     }
   },
   onExpire(_self, others) {
     for (const o of others) {
+      if (!o.frozen) continue;
       o.frozen = false;
-      // Restore to baseline. A loser who had their own active running
-      // when frozen loses it — "stronger effect wins" is the design.
       if (o.alive) o.speed = o.baseSpeed;
     }
   },

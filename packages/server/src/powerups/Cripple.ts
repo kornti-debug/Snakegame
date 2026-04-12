@@ -9,6 +9,7 @@ export const Cripple: PowerUpDefinition = {
   kind: 'active',
   onApply(_self, others) {
     for (const o of others) {
+      if (o.starred) continue;
       o.crippled = true;
       o.speed = o.baseSpeed * 0.45;
       o.turnRate = o.baseTurnRate * 0.3;
@@ -16,6 +17,7 @@ export const Cripple: PowerUpDefinition = {
   },
   onExpire(_self, others) {
     for (const o of others) {
+      if (!o.crippled) continue;
       o.crippled = false;
       if (o.alive) {
         o.speed = o.baseSpeed;

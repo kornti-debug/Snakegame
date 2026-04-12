@@ -40,6 +40,18 @@ const infoTeamDot = document.getElementById('info-team-dot') as HTMLElement;
 const infoTeamName = document.getElementById('info-team-name') as HTMLElement;
 const infoScore = document.getElementById('info-score') as HTMLElement;
 
+// Debuff flash overlay — triggered on onset of frozen / shrunken / crippled.
+const debuffFlashEl = document.getElementById('debuff-flash');
+let prevDebuffs = { frozen: false, shrunken: false, crippled: false };
+function triggerDebuffFlash(color: string): void {
+  if (!debuffFlashEl) return;
+  debuffFlashEl.style.color = color;
+  debuffFlashEl.classList.remove('trigger');
+  // Force reflow so the animation restarts on rapid re-triggers.
+  void (debuffFlashEl as HTMLElement).offsetWidth;
+  debuffFlashEl.classList.add('trigger');
+}
+
 // Item slot overlay
 const slotCard = document.getElementById('slot-card') as HTMLButtonElement;
 const slotName = document.getElementById('slot-name') as HTMLElement;
@@ -283,7 +295,22 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
 
   updateInfoColumn(snapshot);
   updateSlotCard(snapshot);
+  detectDebuffs(snapshot);
 });
+
+function detectDebuffs(snapshot: GameSnapshot): void {
+  if (playerIndex === null) return;
+  const me = snapshot.snakes.find(s => s.playerIndex === playerIndex);
+  const cur = {
+    frozen: !!me?.frozen,
+    shrunken: !!me?.shrunken,
+    crippled: !!me?.crippled,
+  };
+  if (cur.frozen && !prevDebuffs.frozen)     triggerDebuffFlash('#88E0FF');
+  if (cur.shrunken && !prevDebuffs.shrunken) triggerDebuffFlash('#FFDD00');
+  if (cur.crippled && !prevDebuffs.crippled) triggerDebuffFlash('#B088FF');
+  prevDebuffs = cur;
+}
 
 function renderReadyBtn(): void {
   readyBtn.classList.toggle('ready', myReady);

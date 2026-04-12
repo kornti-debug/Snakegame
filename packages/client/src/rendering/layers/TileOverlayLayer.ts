@@ -13,7 +13,7 @@ export class TileOverlayLayer {
     this.ctx = this.canvas.getContext('2d')!;
   }
 
-  render(board: MemoryBoardState, hints: HintState[]): void {
+  render(board: MemoryBoardState, hints: HintState[], pulseBonus: boolean = false): void {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
     this.pulseTime += 0.03;
@@ -44,33 +44,40 @@ export class TileOverlayLayer {
         this.drawHintBorder(ctx, tile);
       }
 
-      // Bonus pair: pulsing rainbow-gold border + crown icon.
-      if (isBonus && !isMatched) {
-        this.drawBonusMarker(ctx, tile);
+      // Bonus pair: pulse the tile only during pre-reveal so players can
+      // spot it before the mask drops. No visualization during gameplay.
+      if (isBonus && !isMatched && pulseBonus) {
+        this.drawBonusPulse(ctx, tile);
       }
     }
   }
 
-  private drawBonusMarker(ctx: CanvasRenderingContext2D, tile: MemoryTile): void {
+  /** Pre-reveal only: a big pulsing gold halo + crown over the bonus-pair
+   *  tiles so players can spot them during the 3s preview. Once the round
+   *  starts this is no longer drawn and the bonus pair blends in. */
+  private drawBonusPulse(ctx: CanvasRenderingContext2D, tile: MemoryTile): void {
     const { x, y, width, height } = tile;
-    const pulse = 0.5 + Math.sin(this.pulseTime * 4) * 0.5;
+    const pulse = 0.5 + Math.sin(this.pulseTime * 6) * 0.5;
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const r = Math.max(width, height) * 0.55;
 
     ctx.save();
-    ctx.strokeStyle = `rgba(255, 215, 0, ${0.55 + pulse * 0.35})`;
-    ctx.lineWidth = 4;
-    ctx.shadowColor = '#FFD700';
-    ctx.shadowBlur = 16 + pulse * 8;
-    ctx.beginPath();
-    ctx.roundRect(x + 4, y + 4, width - 8, height - 8, 10);
-    ctx.stroke();
+    // Radial glow that pulses
+    const grad = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+    grad.addColorStop(0, `rgba(255, 215, 0, ${0.25 + pulse * 0.35})`);
+    grad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - 10, y - 10, width + 20, height + 20);
 
-    // Crown glyph in top-right corner
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = `rgba(255, 215, 0, ${0.8 + pulse * 0.2})`;
-    ctx.font = 'bold 28px monospace';
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'top';
-    ctx.fillText('♛', x + width - 10, y + 6);
+    // Pulsing crown glyph centered above tile
+    ctx.fillStyle = `rgba(255, 215, 0, ${0.7 + pulse * 0.3})`;
+    ctx.shadowColor = '#FFD700';
+    ctx.shadowBlur = 12 + pulse * 10;
+    ctx.font = `bold ${36 + pulse * 6}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('♛', cx, y + 28);
     ctx.restore();
   }
 

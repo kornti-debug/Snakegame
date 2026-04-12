@@ -212,7 +212,7 @@ export class GameRoom {
 
     // Reset round manager to start fresh
     this.roundManager.phase = 'waiting';
-    this.roundManager.roundNumber = 0;
+    this.roundManager.roundNumber = 1;
     this.roundManager.timeRemainingMs = 3000; // shorter first wait
     this.revealSystem.reset();
     this.powerUpSystem.reset();
@@ -226,6 +226,25 @@ export class GameRoom {
     const snakeColors = new Map(snakes.map(s => [s.id, s.color]));
     this.creditSystem.resetTeamCounts(snakeIds);
     this.creditSystem.updateSnakeColors(snakeColors);
+
+    // Prep the first round now so the pre-reveal has a board to show.
+    this.beginRoundSetup(snakes);
+  }
+
+  /** Set up the next round's board + respawn the snakes, and emit the
+   *  round-start event so clients load the tile images. Called at the
+   *  start of every 'waiting' phase (first round from startGame, later
+   *  rounds from the ended→waiting transition in update()). */
+  private beginRoundSetup(snakes: Snake[]): void {
+    this.resetForNewRound(snakes);
+    const symbols = this.customSymbols ?? getDefaultSymbols();
+    this.memoryBoardSystem.setConfig(BOARD_PRESETS[this.boardPreset]);
+    this.memoryBoardSystem.generateBoard(symbols);
+    this.pendingEvents.push({
+      type: 'round-start',
+      roundNumber: this.roundManager.roundNumber,
+      tiles: this.memoryBoardSystem.getTiles(),
+    });
   }
 
   returnToLobby(): void {
@@ -285,17 +304,10 @@ export class GameRoom {
     // Round state machine
     const phaseChange = this.roundManager.update(dt);
 
-    if (phaseChange === 'playing') {
-      this.resetForNewRound(snakes);
-      const symbols = this.customSymbols ?? getDefaultSymbols();
-      this.memoryBoardSystem.setConfig(BOARD_PRESETS[this.boardPreset]);
-      this.memoryBoardSystem.generateBoard(symbols);
-
-      this.pendingEvents.push({
-        type: 'round-start',
-        roundNumber: this.roundManager.roundNumber,
-        tiles: this.memoryBoardSystem.getTiles(),
-      });
+    // Subsequent rounds: setup board at the start of 'waiting' so the
+    // pre-reveal can show it. The first round was set up in startGame().
+    if (phaseChange === 'waiting') {
+      this.beginRoundSetup(snakes);
     }
 
     if (phaseChange === 'ended') {
