@@ -97,6 +97,28 @@
     #hud-bar .hud-item .dot {
       width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
     }
+    /* Passive-stack pills in the HUD bar. Each pill shows a glyph + xN count. */
+    #passive-row {
+      display: flex; align-items: center; gap: 4px;
+      flex-shrink: 0;
+    }
+    #passive-row .pill {
+      display: flex; align-items: center; gap: 2px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 11px;
+    }
+    #passive-row .pill .glyph {
+      font-size: 13px;
+      line-height: 1;
+      text-shadow: 0 0 4px currentColor;
+    }
+    #passive-row .pill .count {
+      font-weight: bold;
+      opacity: 0.85;
+    }
     #leave-btn {
       display: none;
       padding: 5px 12px; font-size: 12px;
@@ -330,12 +352,11 @@
     body.controller-mode #pad-left { left: 0; border-right-width: 1px; }
     body.controller-mode #pad-right { right: 0; border-left-width: 1px; }
 
-    /* ---- Item slot overlay (center-bottom of canvas) ---- */
+    /* ---- Item slot overlay (bottom-right, near the right pad) ---- */
     body.controller-mode #slot-overlay {
       position: absolute;
       bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
+      right: 28%;              /* sits just inside the right pad's inner edge */
       z-index: 8;
       display: flex;
       align-items: center;
@@ -343,7 +364,7 @@
       pointer-events: none;
     }
     #slot-card {
-      min-width: 96px;
+      min-width: 84px;
       padding: 10px 14px;
       border-radius: 12px;
       background: rgba(10, 12, 28, 0.55);
@@ -357,14 +378,16 @@
       letter-spacing: 1px;
       pointer-events: auto;
       transition: transform 0.08s, box-shadow 0.12s, border-color 0.12s;
+      font-family: inherit;
     }
     #slot-card .icon {
       display: block;
-      width: 28px; height: 28px;
+      font-size: 28px;
+      line-height: 1;
       margin: 0 auto 4px;
-      border-radius: 6px;
-      background: currentColor;
-      opacity: 0.4;
+      color: inherit;
+      text-shadow: 0 0 6px currentColor;
+      opacity: 0.5;
     }
     #slot-card .name {
       font-weight: bold;
@@ -424,6 +447,7 @@
           <span class="label">Pairs</span>
           <span class="value" id="info-score">0</span>
         </div>
+        <div id="passive-row"></div>
       </div>
       <button id="fs-btn" title="Fullscreen">⛶</button>
       <button id="leave-btn">Leave</button>
@@ -470,7 +494,7 @@
           <div id="arena-msg">waiting for game to start…</div>
           <div id="slot-overlay">
             <button id="slot-card" type="button">
-              <span class="icon"></span>
+              <span class="icon" id="slot-icon">·</span>
               <span class="name" id="slot-name">empty</span>
             </button>
           </div>

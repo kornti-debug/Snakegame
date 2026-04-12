@@ -43,17 +43,24 @@ const infoScore = document.getElementById('info-score') as HTMLElement;
 // Item slot overlay
 const slotCard = document.getElementById('slot-card') as HTMLButtonElement;
 const slotName = document.getElementById('slot-name') as HTMLElement;
-const slotIcon = slotCard.querySelector('.icon') as HTMLElement;
+const slotIcon = document.getElementById('slot-icon') as HTMLElement;
 
 // Known active powerup metadata for the slot overlay. Icons inherit
 // `currentColor` so the color comes from the card's computed color.
-const POWERUP_META: Record<string, { label: string; color: string }> = {
-  'speed-boost':  { label: 'Speed',   color: '#ffaa00' },
-  'wide-trail':   { label: 'Wide',    color: '#44ffaa' },
-  'ghost':        { label: 'Ghost',   color: '#aaaaff' },
-  'star':         { label: 'Star',    color: '#FFD700' },
-  'swarm-leader': { label: 'Swarm',   color: '#44FFAA' },
-  'predator':     { label: 'Predator',color: '#FF4466' },
+const POWERUP_META: Record<string, { label: string; color: string; icon: string }> = {
+  'speed-boost':  { label: 'Speed',   color: '#ffaa00', icon: '⚡' },
+  'wide-trail':   { label: 'Wide',    color: '#44ffaa', icon: '◈' },
+  'ghost':        { label: 'Ghost',   color: '#aaaaff', icon: '◐' },
+  'star':         { label: 'Star',    color: '#FFD700', icon: '★' },
+  'swarm-leader': { label: 'Swarm',   color: '#44FFAA', icon: '❋' },
+  'predator':     { label: 'Predator',color: '#FF4466', icon: '▲' },
+};
+
+// Passive powerup metadata (for the top bar stacks readout).
+const PASSIVE_META: Record<string, { label: string; color: string; icon: string }> = {
+  'growth':   { label: 'Growth',   color: '#44FF88', icon: '✚' },
+  'steering': { label: 'Steering', color: '#88CCFF', icon: '↺' },
+  'speed':    { label: 'Speed+',   color: '#FFAA44', icon: '»' },
 };
 
 function updateSlotCard(snapshot: GameSnapshot): void {
@@ -62,7 +69,8 @@ function updateSlotCard(snapshot: GameSnapshot): void {
   if (!me) {
     slotCard.classList.remove('armed', 'running');
     slotName.textContent = 'empty';
-    slotIcon.style.color = 'rgba(255,255,255,0.35)';
+    slotIcon.textContent = '·';
+    slotCard.style.color = 'rgba(255,255,255,0.35)';
     return;
   }
   if (me.activeEffect) {
@@ -70,17 +78,20 @@ function updateSlotCard(snapshot: GameSnapshot): void {
     slotCard.classList.remove('armed');
     slotCard.classList.add('running');
     slotName.textContent = meta?.label ?? me.activeEffect;
-    slotIcon.style.color = meta?.color ?? '#FFD700';
+    slotIcon.textContent = meta?.icon ?? '●';
+    slotCard.style.color = meta?.color ?? '#FFD700';
   } else if (me.itemSlot) {
     const meta = POWERUP_META[me.itemSlot];
     slotCard.classList.add('armed');
     slotCard.classList.remove('running');
     slotName.textContent = meta?.label ?? me.itemSlot;
-    slotIcon.style.color = meta?.color ?? '#44ff44';
+    slotIcon.textContent = meta?.icon ?? '●';
+    slotCard.style.color = meta?.color ?? '#44ff44';
   } else {
     slotCard.classList.remove('armed', 'running');
     slotName.textContent = 'empty';
-    slotIcon.style.color = 'rgba(255,255,255,0.35)';
+    slotIcon.textContent = '·';
+    slotCard.style.color = 'rgba(255,255,255,0.35)';
   }
 }
 
@@ -290,10 +301,29 @@ function updateInfoColumn(snapshot: GameSnapshot): void {
     infoTeamName.textContent = TEAM_NAMES[team];
   }
 
-  // Find my snake by name match (snakeId is server-side) to pull pair score.
-  // Fall back to 0 if not found (between rounds or before spawn).
-  const mySnake = snapshot.snakes.find(s => s.name === (me?.name ?? myName));
+  // Use playerIndex (set on snake at startGame) — matches even if names
+  // collide or change mid-session.
+  const mySnake = snapshot.snakes.find(s => s.playerIndex === playerIndex);
   infoScore.textContent = String(mySnake?.pairScore ?? 0);
+
+  renderPassiveRow(mySnake?.passiveStacks ?? {});
+}
+
+const passiveRow = document.getElementById('passive-row')!;
+function renderPassiveRow(stacks: Record<string, number>): void {
+  const entries = Object.entries(stacks).filter(([, n]) => n > 0);
+  if (entries.length === 0) {
+    passiveRow.innerHTML = '';
+    return;
+  }
+  passiveRow.innerHTML = entries.map(([id, n]) => {
+    const meta = PASSIVE_META[id];
+    if (!meta) return '';
+    return `<div class="pill" style="color:${meta.color}" title="${meta.label} ×${n}">
+      <span class="glyph">${meta.icon}</span>
+      <span class="count">×${n}</span>
+    </div>`;
+  }).join('');
 }
 
 // --- Join + leave flow ---

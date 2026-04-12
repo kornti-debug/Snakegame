@@ -1,6 +1,16 @@
 import type { SnakeState } from '@snakegame/shared';
 import { TEAM_COLORS } from '@snakegame/shared';
 
+// Slot / active-effect glyphs for spectator indicator above the snake head.
+const POWERUP_GLYPHS: Record<string, { icon: string; color: string }> = {
+  'speed-boost':  { icon: '⚡', color: '#ffaa00' },
+  'wide-trail':   { icon: '◈', color: '#44ffaa' },
+  'ghost':        { icon: '◐', color: '#aaaaff' },
+  'star':         { icon: '★', color: '#FFD700' },
+  'swarm-leader': { icon: '❋', color: '#44FFAA' },
+  'predator':     { icon: '▲', color: '#FF4466' },
+};
+
 let animTime = 0;
 
 export function drawSnake(ctx: CanvasRenderingContext2D, snake: SnakeState): void {
@@ -58,6 +68,13 @@ export function drawSnake(ctx: CanvasRenderingContext2D, snake: SnakeState): voi
     starDrain, ghostDrain, predatorDrain, swarmDrain, speedDrain, wideDrain,
   });
   drawHead(ctx, snake, headStyle.color, headStyle.glow);
+
+  // Spectator slot indicator: small badge with the queued item's glyph
+  // above the snake's head. Hidden while an effect is already running
+  // (the body tint already communicates the active state).
+  if (snake.alive && snake.itemSlot && !snake.activeEffect) {
+    drawSlotBadge(ctx, snake);
+  }
 
   ctx.globalAlpha = 1;
   ctx.shadowBlur = 0;
@@ -234,6 +251,38 @@ function drawHead(ctx: CanvasRenderingContext2D, snake: SnakeState, headColor: s
     ctx.fill();
   }
 
+  ctx.restore();
+}
+
+function drawSlotBadge(ctx: CanvasRenderingContext2D, snake: SnakeState): void {
+  const head = snake.segments[0];
+  const meta = POWERUP_GLYPHS[snake.itemSlot!];
+  if (!meta) return;
+  const r = snake.radius * 1.4;
+  const badgeR = 10;
+  // Place badge above the head, offset by radius + small gap.
+  const bx = head.x;
+  const by = head.y - r - badgeR - 4;
+
+  ctx.save();
+  // Pill background
+  ctx.fillStyle = 'rgba(10, 12, 28, 0.8)';
+  ctx.strokeStyle = meta.color;
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = meta.color;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Glyph
+  ctx.fillStyle = meta.color;
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(meta.icon, bx, by + 1);
   ctx.restore();
 }
 

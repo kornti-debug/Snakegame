@@ -8,6 +8,8 @@ import { Star } from '../powerups/Star.js';
 import { SwarmLeader } from '../powerups/SwarmLeader.js';
 import { Predator } from '../powerups/Predator.js';
 import { Growth } from '../powerups/Growth.js';
+import { Steering } from '../powerups/Steering.js';
+import { SpeedPassive } from '../powerups/SpeedPassive.js';
 import {
   ARENA_WIDTH,
   ARENA_HEIGHT,
@@ -38,6 +40,8 @@ export class PowerUpSystem {
     this.registry.register(SwarmLeader);
     this.registry.register(Predator);
     this.registry.register(Growth);
+    this.registry.register(Steering);
+    this.registry.register(SpeedPassive);
   }
 
   update(snakes: Snake[], dt: number): void {
@@ -59,14 +63,17 @@ export class PowerUpSystem {
         if (!snake.alive) continue;
 
         if (distanceSq(snake.segments[0], powerUp.position) < collectRadiusSq) {
-          powerUp.collected = true;
           const def = powerUp.definition;
           if (def.kind === 'passive') {
             // Passive: apply instantly, stacks forever, no timer.
+            powerUp.collected = true;
             def.onApply(snake);
           } else {
-            // Active: queue in the snake's item slot (replaces any pending one).
-            // Not applied until the player activates it.
+            // Active: only collect if this snake's slot is free. A full
+            // slot means we can't pick up more — the powerup stays on the
+            // field for someone else (or until you activate and free up).
+            if (snake.itemSlot) continue;
+            powerUp.collected = true;
             snake.itemSlot = def.id;
           }
           break;

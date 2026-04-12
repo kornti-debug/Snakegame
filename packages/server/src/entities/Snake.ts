@@ -33,6 +33,15 @@ export class Snake {
   playerIndex = 0;
   itemSlot: string | null = null;      // queued active powerup id (if any)
   activeEffect: string | null = null;  // currently-running active powerup id
+  // Passive stacks — per-round counts that shape the baseline stats below.
+  // Passives never expire within a round; reset on resetForRound().
+  passiveStacks: Record<string, number> = {};
+  // Baseline stats (after passives, before any active effect). Actives
+  // read these, multiply, and restore them on expire — so passives are
+  // never wiped by an active ending.
+  baseSpeed: number;
+  baseTurnRate: number;
+  baseRevealRadius: number;
   effectDrain: Record<string, number> = {};
   turnDirection: -1 | 0 | 1 = 0;
   boosting = false;
@@ -54,12 +63,27 @@ export class Snake {
     this.revealScore = 0;
     this.pairScore = 0;
     this.revealRadius = REVEAL_BRUSH_RADIUS;
+    this.baseSpeed = SNAKE_SPEED;
+    this.baseTurnRate = SNAKE_TURN_RATE;
+    this.baseRevealRadius = REVEAL_BRUSH_RADIUS;
     this.ghosting = false;
     this.starred = false;
     this.swarmLeader = false;
     this.predator = false;
 
     this.buildInitialPath(spawnPos, spawnAngle);
+  }
+
+  /** Recompute baseline stats from passive stacks. Call after every
+   *  passive pickup and whenever you want to re-sync (e.g. after an
+   *  active expires and restores the baseline). */
+  recomputeBase(): void {
+    const growth   = this.passiveStacks['growth']   ?? 0;
+    const steering = this.passiveStacks['steering'] ?? 0;
+    const speed    = this.passiveStacks['speed']    ?? 0;
+    this.baseRevealRadius = REVEAL_BRUSH_RADIUS * (1 + growth * 0.20);
+    this.baseTurnRate     = SNAKE_TURN_RATE * (1 + steering * 0.20);
+    this.baseSpeed        = SNAKE_SPEED * (1 + speed * 0.10);
   }
 
   private buildInitialPath(spawnPos: Vector2D, spawnAngle: number): void {
@@ -175,6 +199,7 @@ export class Snake {
       playerIndex: this.playerIndex,
       itemSlot: this.itemSlot,
       activeEffect: this.activeEffect,
+      passiveStacks: this.passiveStacks,
       effectDrain: this.effectDrain,
     };
   }
@@ -186,12 +211,15 @@ export class Snake {
   resetForRound(): void {
     this.revealScore = 0;
     this.pairScore = 0;
-    this.revealRadius = REVEAL_BRUSH_RADIUS;
+    this.passiveStacks = {};
+    this.recomputeBase();
+    this.revealRadius = this.baseRevealRadius;
+    this.speed = this.baseSpeed;
+    this.turnRate = this.baseTurnRate;
     this.starred = false;
     this.swarmLeader = false;
     this.predator = false;
     this.ghosting = false;
-    this.speed = SNAKE_SPEED;
     this.itemSlot = null;
     this.activeEffect = null;
   }
@@ -201,9 +229,12 @@ export class Snake {
     this.alive = true;
     this.turnDirection = 0;
     this.boosting = false;
-    this.speed = SNAKE_SPEED;
+    // Preserve passive stacks across death — respawn with the current
+    // baseline rather than stock values.
+    this.speed = this.baseSpeed;
+    this.turnRate = this.baseTurnRate;
+    this.revealRadius = this.baseRevealRadius;
     this.radius = SNAKE_RADIUS;
-    this.revealRadius = REVEAL_BRUSH_RADIUS;
     this.ghosting = false;
     this.starred = false;
     this.swarmLeader = false;

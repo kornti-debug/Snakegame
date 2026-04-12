@@ -24,6 +24,7 @@ export interface SnakeState {
   playerIndex: number;        // global lobby slot (0..MAX_PLAYERS-1)
   itemSlot: string | null;    // queued active powerup id (slot), ready to activate
   activeEffect: string | null;// id of the currently-running active effect (null if none)
+  passiveStacks: Record<string, number>; // passive powerup id → stack count (this round)
   // Active effect drain: 1.0 = just started, 0.0 = expired. Null = no effect.
   effectDrain: Record<string, number>;  // effectId → remaining fraction (0..1)
 }
