@@ -1,5 +1,5 @@
 import { createSocket } from './network/ClientSocket.js';
-import type { GameSnapshot } from '@snakegame/shared';
+import type { GameSnapshot, LobbyPlayer } from '@snakegame/shared';
 import { PLAYER_COLORS, TEAM_COLORS, TEAM_NAMES } from '@snakegame/shared';
 
 // Phone client. Three screens:
@@ -48,6 +48,7 @@ let connected = false;
 let lastTurn: -1 | 0 | 1 = 0;
 type Screen = 'join' | 'settings' | 'controller' | 'error';
 let screen: Screen = 'join';
+let latestLobbyPlayers: LobbyPlayer[] = [];
 
 function setStatus(text: string, ok: boolean): void {
   statusText.textContent = text;
@@ -68,17 +69,30 @@ function show(next: Screen): void {
 }
 
 function renderColorRow(): void {
+  // Colors already claimed by OTHER players are unavailable — two snakes
+  // with the same color would be impossible to tell apart mid-game.
+  const taken = new Set(
+    latestLobbyPlayers
+      .filter(p => p.index !== playerIndex)
+      .map(p => p.color.toUpperCase()),
+  );
+
   colorRow.innerHTML = '';
   for (const color of PLAYER_COLORS) {
+    const isTaken = taken.has(color.toUpperCase());
     const sw = document.createElement('div');
-    sw.className = 'swatch' + (color === myColor ? ' selected' : '');
+    sw.className = 'swatch' + (color === myColor ? ' selected' : '') + (isTaken ? ' taken' : '');
     sw.style.background = color;
-    sw.addEventListener('click', () => {
-      if (playerIndex === null) return;
-      myColor = color;
-      socket.emit('player:set-color', playerIndex, color);
-      renderColorRow();
-    });
+    if (isTaken) {
+      sw.title = 'taken';
+    } else {
+      sw.addEventListener('click', () => {
+        if (playerIndex === null) return;
+        myColor = color;
+        socket.emit('player:set-color', playerIndex, color);
+        renderColorRow();
+      });
+    }
     colorRow.appendChild(sw);
   }
 }
@@ -152,14 +166,22 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
     show('settings');
   }
 
-  // Sync my ready state from the server snapshot so the button visual
-  // stays in sync (e.g. server resets ready=false when returning to lobby).
+  // Cache lobby players so the color palette can disable taken colors.
+  latestLobbyPlayers = snapshot.lobbyPlayers;
+
+  // Sync my state from the server snapshot.
   const me = snapshot.lobbyPlayers.find(p => p.index === playerIndex);
   const serverReady = !!me?.ready;
   if (serverReady !== myReady) {
     myReady = serverReady;
     renderReadyBtn();
   }
+  // If the server rejected a color change (duplicate) our cached myColor
+  // may drift from the server's value — reconcile and redraw.
+  if (me && me.color !== myColor) {
+    myColor = me.color;
+  }
+  if (screen === 'settings') renderColorRow();
 
   updateInfoColumn(snapshot);
 });
@@ -294,6 +316,10 @@ bindPad(padLeft);
 bindPad(padRight);
 
 document.body.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+// Initialize body class for the starting Join screen so portrait mode is
+// allowed immediately on page load (before any show() call).
+show('join');
 
 socket.connect();
 setStatus('Connecting…', false);

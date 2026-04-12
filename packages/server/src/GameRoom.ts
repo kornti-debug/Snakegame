@@ -57,11 +57,13 @@ export class GameRoom {
 
   lobbyJoin(socketId: string, playerIndex: number, name: string, kind: 'keyboard' | 'phone' = 'keyboard'): void {
     const key = `${socketId}:${playerIndex}`;
-    const colorIdx = this.lobbyPlayers.size % PLAYER_COLORS.length;
+    const taken = new Set([...this.lobbyPlayers.values()].map(p => p.color.toUpperCase()));
+    const freeColor = PLAYER_COLORS.find(c => !taken.has(c.toUpperCase()))
+      ?? PLAYER_COLORS[this.lobbyPlayers.size % PLAYER_COLORS.length];
     this.lobbyPlayers.set(key, {
       index: playerIndex,
       name,
-      color: PLAYER_COLORS[colorIdx],
+      color: freeColor,
       ready: false,
       kind,
       team: null,
@@ -155,7 +157,14 @@ export class GameRoom {
 
   lobbySetColor(socketId: string, playerIndex: number, color: string): void {
     const p = this.lobbyPlayers.get(`${socketId}:${playerIndex}`);
-    if (p) p.color = color;
+    if (!p) return;
+    // Reject if another player already owns this color. Two snakes with
+    // identical colors would be indistinguishable during play.
+    for (const [key, other] of this.lobbyPlayers) {
+      if (key === `${socketId}:${playerIndex}`) continue;
+      if (other.color.toUpperCase() === color.toUpperCase()) return;
+    }
+    p.color = color;
   }
 
   lobbySetName(socketId: string, playerIndex: number, name: string): void {

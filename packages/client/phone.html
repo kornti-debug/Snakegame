@@ -156,6 +156,21 @@
       border-color: #fff;
       transform: scale(1.08);
     }
+    .swatch.taken {
+      opacity: 0.25;
+      position: relative;
+    }
+    .swatch.taken::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        45deg,
+        transparent, transparent 4px,
+        rgba(0,0,0,0.5) 4px, rgba(0,0,0,0.5) 6px
+      );
+      border-radius: 5px;
+    }
     .team-row { display: flex; gap: 6px; flex-wrap: wrap; }
     .team-btn {
       padding: 8px 12px; font-size: 12px;
