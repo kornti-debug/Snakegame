@@ -73,7 +73,7 @@ export class LobbyRenderer {
     ctx.font = '18px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.textAlign = 'center';
-    ctx.fillText('P1: A/D join, W/S color  ·  P2: ←/→ join, ↑/↓ color  ·  1-4: pick board', ARENA_WIDTH / 2, hintY);
+    ctx.fillText('P1: A/D join, W/S color  ·  P2: ←/→ join, ↑/↓ color  ·  1-4: pick board  ·  Shift+1-4: kick', ARENA_WIDTH / 2, hintY);
 
     if (players.length >= 1) {
       const startPulse = 0.7 + Math.sin(this.pulseTime * 4) * 0.3;

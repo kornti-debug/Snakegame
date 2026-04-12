@@ -48,6 +48,12 @@ function setScreen(next: ClientScreen): void {
   // Respawn the ambient swarm every time we arrive at the main menu so the
   // viewer sees the flock form up fresh instead of an already-settled swarm.
   if (next === 'main-menu') bgBoids.reset();
+  // Clear stale reveal/background state whenever we start a fresh game
+  // session. Without this, the projector shows last session's carved reveals
+  // during the 3s "Round starting" countdown before round-start fires.
+  if (next === 'ingame' && clientScreen !== 'exit-confirm') {
+    renderer.resetRound();
+  }
   clientScreen = next;
 }
 let latestSnapshot: GameSnapshot | null = null;
@@ -61,12 +67,14 @@ const PRESETS: BoardPreset[] = ['small', 'medium', 'large', 'huge'];
 
 // --- Keyboard routing ---
 window.addEventListener('keydown', (e) => {
-  // Global: exit-confirm always wins
+  // Pause overlay (host-only): resume, exit-to-menu, or dismiss.
   if (clientScreen === 'exit-confirm') {
     if (e.code === 'KeyY') {
+      socket.emit('game:set-paused', false);
       socket.emit('lobby:return');
       setScreen('main-menu');
-    } else if (e.code === 'KeyN' || e.code === 'Escape') {
+    } else if (e.code === 'KeyR' || e.code === 'KeyN' || e.code === 'Escape') {
+      socket.emit('game:set-paused', false);
       setScreen('ingame');
     }
     return;
@@ -93,6 +101,22 @@ window.addEventListener('keydown', (e) => {
       setScreen('main-menu');
       return;
     }
+
+    // Shift + 1..4 kicks a slot (host-only; server gates this).
+    if (e.shiftKey) {
+      const kickMap: Record<string, number> = {
+        Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3,
+        Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3,
+      };
+      const slot = kickMap[e.code];
+      if (slot !== undefined) {
+        socket.emit('lobby:kick', slot);
+        // If it's our own keyboard slot (0 or 1), forget we joined so we can rejoin.
+        if (slot === 0 || slot === 1) joinedPlayers.delete(slot);
+        return;
+      }
+    }
+
     // Player 1 join: A or D
     if ((e.code === 'KeyA' || e.code === 'KeyD') && !joinedPlayers.has(0)) {
       joinedPlayers.add(0);
@@ -136,6 +160,7 @@ window.addEventListener('keydown', (e) => {
 
   if (clientScreen === 'ingame') {
     if (e.code === 'Escape') {
+      socket.emit('game:set-paused', true);
       setScreen('exit-confirm');
     }
     return;
@@ -222,7 +247,7 @@ function gameLoop(): void {
     lobbyRenderer.render(lobbyPlayers, boardPreset);
   } else {
     // ingame or exit-confirm — both render the game, confirm overlays on top
-    for (let i = 0; i < joinedPlayers.size; i++) {
+    for (const i of joinedPlayers) {
       const input = inputManager.poll(i);
       if (input && input.turnDirection !== lastTurnDirection[i]) {
         socket.emit('input:turn', i, input.turnDirection);

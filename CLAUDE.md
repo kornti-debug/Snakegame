@@ -56,7 +56,8 @@ npm run dev:client
 - Lobby/menu system — main menu + instructions screen + exit confirm dialog, ambient flocking boids behind menus
 - Board preset picker in lobby (small / medium / large / huge) via keys 1-4 or [ / ]
 - Title: **SNAKE MEMORY**
-- **Phone-join (Phase 1)**: QR code in lobby points to `/phone.html`; phone clients act as virtual gamepads (tap-and-hold left/right zones → `input:turn`). Auto-allocates the lowest free slot (max 4 players, keyboard + phones mix).
+- **Phone-join (Phase 1)**: QR code in lobby points to `/phone.html`; phone clients act as virtual gamepads (tap-and-hold left/right zones → `input:turn`). Auto-allocates the lowest free slot (max 4 players, keyboard + phones mix). Phone has a Leave button (emits `player:leave`, kills snake + frees slot).
+- **Host controls**: ESC in-game pauses the game + opens a menu (R resume, Y exit, ESC/N resume). Shift+1-4 in the lobby kicks that slot. Phones can't trigger pause/kick (server gates via `phoneSockets`).
 - **External REST API** (`/api/external/*`) for Touch Designer integration
 - **WebSocket namespace** (`/touchdesigner`) for real-time TD events
 - Tile image management (built-in SVG defaults + TD override via API)

@@ -47,6 +47,8 @@ export interface ClientToServerEvents {
   'lobby:start-game': () => void;
   'lobby:return': () => void;
   'lobby:set-config': (payload: { preset: BoardPreset }) => void;
+  'lobby:kick': (slotIndex: number) => void;
+  'game:set-paused': (paused: boolean) => void;
   'phone:join': (payload: { name?: string }) => void;
 }
 

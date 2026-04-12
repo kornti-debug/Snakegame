@@ -16,6 +16,7 @@ const nameInput = document.getElementById('name-input') as HTMLInputElement;
 const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
 const padLeft = document.getElementById('pad-left')!;
 const padRight = document.getElementById('pad-right')!;
+const leaveBtn = document.getElementById('leave-btn') as HTMLButtonElement;
 
 let playerIndex: number | null = null;
 let playerColor = '#44aaff';
@@ -56,6 +57,7 @@ socket.on('phone:joined', ({ playerIndex: idx, color }) => {
   controller.style.setProperty('--accent', color);
   padLeft.style.borderColor = color;
   padRight.style.borderColor = color;
+  leaveBtn.classList.add('visible');
   show('controller');
 });
 
@@ -69,6 +71,20 @@ joinBtn.addEventListener('click', () => {
   socket.emit('phone:join', { name: nameInput.value.trim() || undefined });
   joinBtn.disabled = true;
   joinBtn.textContent = 'Joining…';
+});
+
+leaveBtn.addEventListener('click', () => {
+  if (playerIndex === null) return;
+  socket.emit('player:leave', playerIndex);
+  playerIndex = null;
+  lastTurn = 0;
+  padLeft.classList.remove('active');
+  padRight.classList.remove('active');
+  leaveBtn.classList.remove('visible');
+  joinBtn.disabled = false;
+  joinBtn.textContent = 'Join';
+  setStatus('Connected — join the game', true);
+  show('join');
 });
 
 function sendTurn(dir: -1 | 0 | 1): void {

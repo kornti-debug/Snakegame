@@ -41,6 +41,12 @@ export class GameRoom {
   // Board preset chosen in lobby (applied at round start)
   boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
 
+  // Sockets that joined via phone QR — cannot pause/kick. Used to gate
+  // host-only actions so only the projector (keyboard) client can control them.
+  private phoneSockets = new Set<string>();
+
+  paused = false;
+
   pendingEvents: GameEvent[] = [];
 
   constructor(uploadDir: string) {
@@ -70,14 +76,66 @@ export class GameRoom {
     for (let i = 0; i < maxSlots; i++) {
       if (used.has(i)) continue;
       this.lobbyJoin(socketId, i, name);
+      this.phoneSockets.add(socketId);
       const joined = this.lobbyPlayers.get(`${socketId}:${i}`);
       return { index: i, color: joined?.color ?? PLAYER_COLORS[i % PLAYER_COLORS.length] };
     }
     return null;
   }
 
+  isPhoneSocket(socketId: string): boolean {
+    return this.phoneSockets.has(socketId);
+  }
+
+  /** Kick any player (by global slot index). Removes lobby entry + kills snake
+   *  + drops any respawn timer. Returns true if a slot was kicked. */
+  kickSlot(slotIndex: number): boolean {
+    let kicked = false;
+    for (const [key, p] of [...this.lobbyPlayers]) {
+      if (p.index !== slotIndex) continue;
+      const socketId = key.split(':')[0];
+      this.lobbyPlayers.delete(key);
+      this.phoneSockets.delete(socketId);
+      const playerMap = this.players.get(socketId);
+      if (playerMap) {
+        const snake = playerMap.get(p.index);
+        if (snake) {
+          snake.alive = false;
+          this.respawnTimers.delete(snake.id);
+          playerMap.delete(p.index);
+        }
+        if (playerMap.size === 0) this.players.delete(socketId);
+      }
+      kicked = true;
+    }
+    return kicked;
+  }
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+  }
+
   lobbyLeave(socketId: string, playerIndex: number): void {
     this.lobbyPlayers.delete(`${socketId}:${playerIndex}`);
+  }
+
+  /** Clean exit for a single player slot: removes lobby entry, phone mark,
+   *  and (if a game is running) kills the snake + drops the respawn timer. */
+  playerLeave(socketId: string, playerIndex: number): void {
+    this.lobbyLeave(socketId, playerIndex);
+    const playerMap = this.players.get(socketId);
+    if (playerMap) {
+      const snake = playerMap.get(playerIndex);
+      if (snake) {
+        snake.alive = false;
+        this.respawnTimers.delete(snake.id);
+        playerMap.delete(playerIndex);
+      }
+      if (playerMap.size === 0) this.players.delete(socketId);
+    }
+    // If this was the only slot this phone had, clear its phone mark.
+    const stillHas = [...this.lobbyPlayers.keys()].some(k => k.startsWith(`${socketId}:`));
+    if (!stillHas) this.phoneSockets.delete(socketId);
   }
 
   lobbyLeaveAll(socketId: string): void {
@@ -111,6 +169,7 @@ export class GameRoom {
     if (this.lobbyPlayers.size === 0) return;
 
     this.gamePhase = 'ingame';
+    this.paused = false;
     this.players.clear();
     this.tick = 0;
 
@@ -145,10 +204,12 @@ export class GameRoom {
 
   returnToLobby(): void {
     this.gamePhase = 'lobby';
+    this.paused = false;
     this.players.clear();
     this.respawnTimers.clear();
     this.revealSystem.reset();
     this.powerUpSystem.reset();
+    this.memoryBoardSystem.setConfig(BOARD_PRESETS[this.boardPreset]);
     this.obstacles = [];
     // Keep lobby players as-is
     for (const p of this.lobbyPlayers.values()) {
@@ -170,6 +231,7 @@ export class GameRoom {
       }
     }
     this.players.delete(socketId);
+    this.phoneSockets.delete(socketId);
     this.lobbyLeaveAll(socketId);
   }
 
@@ -188,6 +250,8 @@ export class GameRoom {
     this.pendingEvents = [];
 
     if (this.gamePhase !== 'ingame') return;
+    // When paused, freeze everything — round timer, movement, reveals, respawns.
+    if (this.paused) return;
 
     const snakes = this.getAllSnakes();
 
@@ -357,6 +421,7 @@ export class GameRoom {
       memoryBoard: this.memoryBoardSystem.getBoardState(),
       hints: this.memoryBoardSystem.getHints(),
       boardPreset: this.boardPreset,
+      paused: this.paused,
     };
   }
 

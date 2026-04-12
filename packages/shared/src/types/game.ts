@@ -76,6 +76,7 @@ export interface GameSnapshot {
   memoryBoard: MemoryBoardState;
   hints: HintState[];
   boardPreset: BoardPreset;
+  paused: boolean;
 }
 
 export interface BoidState {

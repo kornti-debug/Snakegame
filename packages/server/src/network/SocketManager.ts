@@ -34,7 +34,7 @@ export class SocketManager {
       });
 
       socket.on('player:leave', (playerIndex) => {
-        this.room.lobbyLeave(socket.id, playerIndex);
+        this.room.playerLeave(socket.id, playerIndex);
       });
 
       socket.on('player:ready', (playerIndex) => {
@@ -71,6 +71,19 @@ export class SocketManager {
         if (preset !== 'small' && preset !== 'medium' && preset !== 'large' && preset !== 'huge') return;
         this.room.boardPreset = preset;
         console.log(`[Lobby] Board preset set to ${preset}`);
+      });
+
+      socket.on('lobby:kick', (slotIndex) => {
+        if (this.room.isPhoneSocket(socket.id)) return; // phones can't kick
+        if (typeof slotIndex !== 'number') return;
+        const ok = this.room.kickSlot(slotIndex);
+        if (ok) console.log(`[Lobby] Slot ${slotIndex + 1} kicked`);
+      });
+
+      socket.on('game:set-paused', (paused) => {
+        if (this.room.isPhoneSocket(socket.id)) return; // phones can't pause
+        this.room.setPaused(!!paused);
+        console.log(`[Game] Paused = ${!!paused}`);
       });
 
       socket.on('lobby:return', () => {
