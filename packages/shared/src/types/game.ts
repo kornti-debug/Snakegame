@@ -59,6 +59,7 @@ export interface LobbyPlayer {
   name: string;
   color: string;
   ready: boolean;
+  kind: 'keyboard' | 'phone';
 }
 
 export interface GameSnapshot {

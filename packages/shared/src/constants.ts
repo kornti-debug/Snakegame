@@ -40,7 +40,12 @@ export const PLAYER_COLORS = [
   '#44FFFF', // cyan
   '#FFFF44', // yellow
   '#AA44FF', // purple
+  '#FF8888', // pink
+  '#88FF88', // mint
 ];
+
+/** Upper bound on concurrent players in the lobby (keyboard + phone). */
+export const MAX_PLAYERS = 10;
 
 // Memory card game — legacy constants (kept for any code still importing directly).
 // Prefer BoardConfig / BOARD_PRESETS below.

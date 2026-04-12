@@ -1,5 +1,5 @@
 import type { GameSnapshot, GamePhase, LobbyPlayer, Vector2D, BoardPreset } from '@snakegame/shared';
-import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS, COST_POWERUP, COST_OBSTACLE, COST_HINT, REWARD_CORRECT_GUESS, BOID_REVEAL_RADIUS, BOARD_PRESETS, DEFAULT_BOARD_PRESET, cellToPixel, isValidCell } from '@snakegame/shared';
+import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS, MAX_PLAYERS, COST_POWERUP, COST_OBSTACLE, COST_HINT, REWARD_CORRECT_GUESS, BOID_REVEAL_RADIUS, BOARD_PRESETS, DEFAULT_BOARD_PRESET, cellToPixel, isValidCell } from '@snakegame/shared';
 import { Snake } from './entities/Snake.js';
 import { Obstacle } from './entities/Obstacle.js';
 import { PowerUp } from './entities/PowerUp.js';
@@ -55,7 +55,7 @@ export class GameRoom {
 
   // --- Lobby ---
 
-  lobbyJoin(socketId: string, playerIndex: number, name: string): void {
+  lobbyJoin(socketId: string, playerIndex: number, name: string, kind: 'keyboard' | 'phone' = 'keyboard'): void {
     const key = `${socketId}:${playerIndex}`;
     const colorIdx = this.lobbyPlayers.size % PLAYER_COLORS.length;
     this.lobbyPlayers.set(key, {
@@ -63,19 +63,20 @@ export class GameRoom {
       name,
       color: PLAYER_COLORS[colorIdx],
       ready: false,
+      kind,
     });
   }
 
   /** Allocate the lowest free global slot (0..MAX-1) for a phone client.
    *  Returns { index, color } or null if full. Registers the phone as
    *  a normal lobby player under its own socket. */
-  phoneJoin(socketId: string, name: string = 'Phone', maxSlots: number = 4): { index: number; color: string } | null {
+  phoneJoin(socketId: string, name: string = 'Phone', maxSlots: number = MAX_PLAYERS): { index: number; color: string } | null {
     if (this.gamePhase !== 'lobby') return null;
     const used = new Set<number>();
     for (const p of this.lobbyPlayers.values()) used.add(p.index);
     for (let i = 0; i < maxSlots; i++) {
       if (used.has(i)) continue;
-      this.lobbyJoin(socketId, i, name);
+      this.lobbyJoin(socketId, i, name, 'phone');
       this.phoneSockets.add(socketId);
       const joined = this.lobbyPlayers.get(`${socketId}:${i}`);
       return { index: i, color: joined?.color ?? PLAYER_COLORS[i % PLAYER_COLORS.length] };
@@ -191,6 +192,7 @@ export class GameRoom {
     this.roundManager.timeRemainingMs = 3000; // shorter first wait
     this.revealSystem.reset();
     this.powerUpSystem.reset();
+    this.memoryBoardSystem.reset();
     this.obstacles = [];
     this.respawnTimers.clear();
 
@@ -210,6 +212,7 @@ export class GameRoom {
     this.revealSystem.reset();
     this.powerUpSystem.reset();
     this.memoryBoardSystem.setConfig(BOARD_PRESETS[this.boardPreset]);
+    this.memoryBoardSystem.reset();
     this.obstacles = [];
     // Keep lobby players as-is
     for (const p of this.lobbyPlayers.values()) {

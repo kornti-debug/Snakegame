@@ -32,6 +32,22 @@ export class MemoryBoardSystem {
     this.config = cfg;
   }
 
+  /** Clear all board state — used when starting a fresh game session so the
+   *  waiting-phase snapshot doesn't carry stale tiles / progress bars. */
+  reset(): void {
+    this.tiles = [];
+    this.pairs = [];
+    this.pairScores.clear();
+    this.hints = [];
+    this.pendingEvents = [];
+    this.tileSnakeReveals = [];
+    this.tileRevealedCounts = [];
+    this.tileBlockCounts = [];
+    // blockToTile is rebuilt at generateBoard; keep it a valid empty buffer
+    // in case update() is called with no board yet.
+    this.blockToTile = new Uint8Array(REVEAL_GRID_WIDTH * REVEAL_GRID_HEIGHT);
+  }
+
   // Lookup table: reveal grid block → tileId+1 (0 = no tile)
   private blockToTile!: Uint8Array;
   // Per-tile total block count (for percentage calculation)
