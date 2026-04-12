@@ -30,6 +30,13 @@ const teamRow = document.getElementById('team-row')!;
 const padLeft = document.getElementById('pad-left')!;
 const padRight = document.getElementById('pad-right')!;
 
+// Controller info column
+const infoColor = document.getElementById('info-color') as HTMLElement;
+const infoName = document.getElementById('info-name') as HTMLElement;
+const infoTeamDot = document.getElementById('info-team-dot') as HTMLElement;
+const infoTeamName = document.getElementById('info-team-name') as HTMLElement;
+const infoScore = document.getElementById('info-score') as HTMLElement;
+
 let playerIndex: number | null = null;
 let myName = '';
 let myColor = PLAYER_COLORS[0];
@@ -136,7 +143,29 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
   } else if (snapshot.gamePhase === 'lobby' && screen === 'controller') {
     show('settings');
   }
+  updateInfoColumn(snapshot);
 });
+
+function updateInfoColumn(snapshot: GameSnapshot): void {
+  if (playerIndex === null) return;
+  const me = snapshot.lobbyPlayers.find(p => p.index === playerIndex);
+  infoColor.style.background = me?.color ?? myColor;
+  infoName.textContent = me?.name ?? myName ?? `Player ${playerIndex + 1}`;
+
+  const team = me?.team ?? null;
+  if (team === null) {
+    infoTeamDot.style.background = 'rgba(255,255,255,0.25)';
+    infoTeamName.textContent = 'Solo';
+  } else {
+    infoTeamDot.style.background = TEAM_COLORS[team];
+    infoTeamName.textContent = TEAM_NAMES[team];
+  }
+
+  // Find my snake by name match (snakeId is server-side) to pull pair score.
+  // Fall back to 0 if not found (between rounds or before spawn).
+  const mySnake = snapshot.snakes.find(s => s.name === (me?.name ?? myName));
+  infoScore.textContent = String(mySnake?.pairScore ?? 0);
+}
 
 // --- Join + leave flow ---
 
