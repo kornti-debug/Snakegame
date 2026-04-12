@@ -10,6 +10,9 @@ import { Predator } from '../powerups/Predator.js';
 import { Growth } from '../powerups/Growth.js';
 import { Steering } from '../powerups/Steering.js';
 import { SpeedPassive } from '../powerups/SpeedPassive.js';
+import { TimeFreeze } from '../powerups/TimeFreeze.js';
+import { Lightning } from '../powerups/Lightning.js';
+import { Cripple } from '../powerups/Cripple.js';
 import {
   ARENA_WIDTH,
   ARENA_HEIGHT,
@@ -42,6 +45,9 @@ export class PowerUpSystem {
     this.registry.register(Growth);
     this.registry.register(Steering);
     this.registry.register(SpeedPassive);
+    this.registry.register(TimeFreeze);
+    this.registry.register(Lightning);
+    this.registry.register(Cripple);
   }
 
   update(snakes: Snake[], dt: number): void {
@@ -67,7 +73,7 @@ export class PowerUpSystem {
           if (def.kind === 'passive') {
             // Passive: apply instantly, stacks forever, no timer.
             powerUp.collected = true;
-            def.onApply(snake);
+            def.onApply(snake, this.otherSnakes(snake, snakes));
           } else {
             // Active: only collect if this snake's slot is free. A full
             // slot means we can't pick up more — the powerup stays on the
@@ -94,7 +100,7 @@ export class PowerUpSystem {
         const def = this.registry.get(effect.definitionId);
 
         if (snake && def) {
-          def.onExpire(snake);
+          def.onExpire(snake, this.otherSnakes(snake, snakes));
           if (snake.activeEffect === effect.definitionId) snake.activeEffect = null;
         }
 
@@ -103,10 +109,14 @@ export class PowerUpSystem {
     }
   }
 
+  private otherSnakes(self: Snake, snakes: Snake[]): Snake[] {
+    return snakes.filter(s => s !== self && s.alive);
+  }
+
   /** Player pressed the activate button. If they have a slotted active
    *  powerup, cancel any currently-running active effect on that snake
    *  (only one at a time per user's design) and start the slotted one. */
-  activateSlot(snake: Snake): boolean {
+  activateSlot(snake: Snake, snakes: Snake[]): boolean {
     if (!snake.alive) return false;
     if (!snake.itemSlot) return false;
     const def = this.registry.get(snake.itemSlot);
@@ -115,17 +125,19 @@ export class PowerUpSystem {
       return false;
     }
 
+    const others = this.otherSnakes(snake, snakes);
+
     // Cancel current active effect (if any) on this snake.
     for (let i = this.activeEffects.length - 1; i >= 0; i--) {
       const e = this.activeEffects[i];
       if (e.snakeId !== snake.id) continue;
       const prev = this.registry.get(e.definitionId);
-      if (prev) prev.onExpire(snake);
+      if (prev) prev.onExpire(snake, others);
       this.activeEffects.splice(i, 1);
     }
 
     // Start the slotted effect.
-    def.onApply(snake);
+    def.onApply(snake, others);
     this.activeEffects.push({
       snakeId: snake.id,
       definitionId: def.id,
@@ -174,7 +186,7 @@ export class PowerUpSystem {
     for (const effect of this.activeEffects) {
       const snake = snakes.find(s => s.id === effect.snakeId);
       const def = this.registry.get(effect.definitionId);
-      if (snake && def) def.onExpire(snake);
+      if (snake && def) def.onExpire(snake, this.otherSnakes(snake, snakes));
       if (snake) snake.activeEffect = null;
     }
     this.activeEffects = [];

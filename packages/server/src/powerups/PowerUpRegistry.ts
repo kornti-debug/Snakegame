@@ -5,14 +5,18 @@ export type PowerUpKind = 'active' | 'passive';
 export interface PowerUpDefinition {
   id: string;
   displayName: string;
+  /** 0 = never spawns on the field (e.g. bonus-pair rewards). */
   spawnWeight: number;
   duration: number; // ms, 0 = instant
   /** 'active' powerups queue into the snake's item slot and must be
    *  manually activated. 'passive' powerups apply instantly on pickup and
    *  stack forever (no expiry timer). */
   kind: PowerUpKind;
-  onApply(snake: Snake): void;
-  onExpire(snake: Snake): void;
+  /** Apply the effect. `others` is the list of OTHER living snakes at the
+   *  moment of apply — broadcast powerups (freeze, lightning, cripple)
+   *  use it to debuff opponents. Self-only powerups ignore it. */
+  onApply(snake: Snake, others: Snake[]): void;
+  onExpire(snake: Snake, others: Snake[]): void;
   renderHint: { color: string; shape: string };
 }
 

@@ -9,6 +9,9 @@ const POWERUP_GLYPHS: Record<string, { icon: string; color: string }> = {
   'star':         { icon: '★', color: '#FFD700' },
   'swarm-leader': { icon: '❋', color: '#44FFAA' },
   'predator':     { icon: '▲', color: '#FF4466' },
+  'time-freeze':  { icon: '❄', color: '#88E0FF' },
+  'lightning':    { icon: '⚡', color: '#FFDD00' },
+  'cripple':      { icon: '☠', color: '#B088FF' },
 };
 
 let animTime = 0;

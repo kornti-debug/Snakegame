@@ -20,6 +20,9 @@ export interface SnakeState {
   starred: boolean;           // star powerup — invincible + kills on touch
   swarmLeader: boolean;       // boids follow this snake
   predator: boolean;          // boids flee with larger radius
+  frozen: boolean;            // time-freeze victim
+  shrunken: boolean;          // lightning victim (reduced radius)
+  crippled: boolean;          // cripple victim (slow + bad steering)
   team: number | null;        // team index (see TEAM_COLORS); null = solo
   playerIndex: number;        // global lobby slot (0..MAX_PLAYERS-1)
   itemSlot: string | null;    // queued active powerup id (slot), ready to activate
@@ -123,6 +126,7 @@ export interface MemoryPair {
   tileIds: [number, number];
   matched: boolean;            // true when both tiles captured by same snake
   matchedBy: string | null;    // snakeId that matched the pair
+  isBonus: boolean;            // one pair per round grants an OP powerup when matched
 }
 
 export interface MemoryBoardState {

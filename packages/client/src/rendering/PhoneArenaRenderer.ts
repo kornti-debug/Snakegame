@@ -52,7 +52,11 @@ export class PhoneArenaRenderer {
     const bctx = this.bctx;
     bctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
     bctx.drawImage(this.backgroundLayer.canvas, 0, 0);
-    bctx.drawImage(this.revealLayer.canvas, 0, 0);
+    // Skip the reveal mask during the pre-reveal phase so the player
+    // sees the tiles + bonus pair before the round starts.
+    if (snapshot.round.phase !== 'waiting') {
+      bctx.drawImage(this.revealLayer.canvas, 0, 0);
+    }
 
     const colorMap = new Map(snapshot.snakes.map(s => [s.id, s.color]));
     this.tileOverlayLayer.setSnakeColors(colorMap);

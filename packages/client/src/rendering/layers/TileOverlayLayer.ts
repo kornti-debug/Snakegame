@@ -24,6 +24,7 @@ export class TileOverlayLayer {
       const pair = board.pairs.find(p => p.pairId === tile.pairId);
       const isMatched = pair?.matched ?? false;
       const isHinted = hintedPairIds.has(tile.pairId);
+      const isBonus = pair?.isBonus ?? false;
 
       if (isMatched) {
         this.drawMatchedTile(ctx, tile);
@@ -42,7 +43,35 @@ export class TileOverlayLayer {
       if (isHinted && !isMatched) {
         this.drawHintBorder(ctx, tile);
       }
+
+      // Bonus pair: pulsing rainbow-gold border + crown icon.
+      if (isBonus && !isMatched) {
+        this.drawBonusMarker(ctx, tile);
+      }
     }
+  }
+
+  private drawBonusMarker(ctx: CanvasRenderingContext2D, tile: MemoryTile): void {
+    const { x, y, width, height } = tile;
+    const pulse = 0.5 + Math.sin(this.pulseTime * 4) * 0.5;
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 215, 0, ${0.55 + pulse * 0.35})`;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = '#FFD700';
+    ctx.shadowBlur = 16 + pulse * 8;
+    ctx.beginPath();
+    ctx.roundRect(x + 4, y + 4, width - 8, height - 8, 10);
+    ctx.stroke();
+
+    // Crown glyph in top-right corner
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = `rgba(255, 215, 0, ${0.8 + pulse * 0.2})`;
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText('♛', x + width - 10, y + 6);
+    ctx.restore();
   }
 
   /** Matched pair: snake's color, brighter + thicker stroke */

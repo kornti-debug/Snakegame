@@ -58,8 +58,13 @@ export class Renderer {
     // Layer 1: Background (tile images)
     ctx.drawImage(this.backgroundLayer.canvas, 0, 0);
 
-    // Layer 2: Reveal mask (covers tiles, holes show through)
-    ctx.drawImage(this.revealLayer.canvas, 0, 0);
+    // Layer 2: Reveal mask (covers tiles, holes show through).
+    // Skipped during the pre-round 'waiting' phase so players get a brief
+    // look at all tile positions + the bonus pair before the round starts.
+    const preReveal = snapshot.round.phase === 'waiting';
+    if (!preReveal) {
+      ctx.drawImage(this.revealLayer.canvas, 0, 0);
+    }
 
     // Layer 3: Tile overlay (borders, capture states, hints)
     // Update snake color cache from snapshot

@@ -29,6 +29,10 @@ export class Snake {
   starred: boolean;
   swarmLeader: boolean;
   predator: boolean;
+  // Debuffs inflicted by OP bonus powerups (time-freeze / lightning / cripple).
+  frozen = false;
+  shrunken = false;
+  crippled = false;
   team: number | null = null;
   playerIndex = 0;
   itemSlot: string | null = null;      // queued active powerup id (if any)
@@ -195,6 +199,9 @@ export class Snake {
       starred: this.starred,
       swarmLeader: this.swarmLeader,
       predator: this.predator,
+      frozen: this.frozen,
+      shrunken: this.shrunken,
+      crippled: this.crippled,
       team: this.team,
       playerIndex: this.playerIndex,
       itemSlot: this.itemSlot,
@@ -220,6 +227,9 @@ export class Snake {
     this.swarmLeader = false;
     this.predator = false;
     this.ghosting = false;
+    this.frozen = false;
+    this.shrunken = false;
+    this.crippled = false;
     this.itemSlot = null;
     this.activeEffect = null;
   }
@@ -239,6 +249,9 @@ export class Snake {
     this.starred = false;
     this.swarmLeader = false;
     this.predator = false;
+    this.frozen = false;
+    this.shrunken = false;
+    this.crippled = false;
 
     this.buildInitialPath(pos, angle);
   }

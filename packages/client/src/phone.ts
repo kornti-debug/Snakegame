@@ -48,12 +48,16 @@ const slotIcon = document.getElementById('slot-icon') as HTMLElement;
 // Known active powerup metadata for the slot overlay. Icons inherit
 // `currentColor` so the color comes from the card's computed color.
 const POWERUP_META: Record<string, { label: string; color: string; icon: string }> = {
-  'speed-boost':  { label: 'Speed',   color: '#ffaa00', icon: '⚡' },
-  'wide-trail':   { label: 'Wide',    color: '#44ffaa', icon: '◈' },
-  'ghost':        { label: 'Ghost',   color: '#aaaaff', icon: '◐' },
-  'star':         { label: 'Star',    color: '#FFD700', icon: '★' },
-  'swarm-leader': { label: 'Swarm',   color: '#44FFAA', icon: '❋' },
-  'predator':     { label: 'Predator',color: '#FF4466', icon: '▲' },
+  'speed-boost':  { label: 'Speed',    color: '#ffaa00', icon: '⚡' },
+  'wide-trail':   { label: 'Wide',     color: '#44ffaa', icon: '◈' },
+  'ghost':        { label: 'Ghost',    color: '#aaaaff', icon: '◐' },
+  'star':         { label: 'Star',     color: '#FFD700', icon: '★' },
+  'swarm-leader': { label: 'Swarm',    color: '#44FFAA', icon: '❋' },
+  'predator':     { label: 'Predator', color: '#FF4466', icon: '▲' },
+  // Bonus (OP) powerups — only obtained from matching the bonus pair.
+  'time-freeze':  { label: 'Freeze',   color: '#88E0FF', icon: '❄' },
+  'lightning':    { label: 'Lightning',color: '#FFDD00', icon: '⚡' },
+  'cripple':      { label: 'Cripple',  color: '#B088FF', icon: '☠' },
 };
 
 // Passive powerup metadata (for the top bar stacks readout).

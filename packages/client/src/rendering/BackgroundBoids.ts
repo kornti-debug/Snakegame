@@ -6,8 +6,8 @@ interface BgBoid {
   trail: { x: number; y: number }[];
 }
 
-const TRAIL_LENGTH = 10;    // segments per mini snake
-const TRAIL_SPACING = 7;    // px between segments
+const TRAIL_LENGTH = 10;
+const TRAIL_SPACING = 7;
 const BODY_WIDTH = 3.5;
 
 /** Self-contained ambient flocking boids for menu / lobby backgrounds.
@@ -23,7 +23,6 @@ export class BackgroundBoids {
     this.spawn();
   }
 
-  /** Re-spawn all boids with fresh random positions. */
   reset(): void {
     this.spawn();
     this.lastFrame = performance.now();
@@ -63,7 +62,6 @@ export class BackgroundBoids {
 
       for (const o of this.boids) {
         if (o === b) continue;
-        // Wrap-aware distance (shortest delta across torus)
         let dx = o.x - b.x, dy = o.y - b.y;
         if (dx > ARENA_WIDTH / 2) dx -= ARENA_WIDTH;
         else if (dx < -ARENA_WIDTH / 2) dx += ARENA_WIDTH;
@@ -88,7 +86,6 @@ export class BackgroundBoids {
       b.vx += (sepX * 0.08 + aliX * 0.04 + cohX * 0.01) * dt * 60;
       b.vy += (sepY * 0.08 + aliY * 0.04 + cohY * 0.01) * dt * 60;
 
-      // Clamp speed
       const sp = Math.hypot(b.vx, b.vy);
       if (sp > MAX_SPEED) {
         b.vx = (b.vx / sp) * MAX_SPEED;
@@ -102,8 +99,6 @@ export class BackgroundBoids {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
 
-      // Torus wrap — when wrapping, clear the trail so we don't draw a line
-      // across the whole screen connecting pre-wrap to post-wrap position.
       let wrapped = false;
       if (b.x < 0) { b.x += ARENA_WIDTH; wrapped = true; }
       else if (b.x >= ARENA_WIDTH) { b.x -= ARENA_WIDTH; wrapped = true; }
@@ -123,7 +118,6 @@ export class BackgroundBoids {
     ctx.lineJoin = 'round';
 
     for (const b of this.boids) {
-      // Build even-spaced segments along the trail (like the server boids)
       const segments: { x: number; y: number }[] = [{ x: b.x, y: b.y }];
       let walked = 0;
       let nextDist = TRAIL_SPACING;
@@ -145,7 +139,6 @@ export class BackgroundBoids {
       }
 
       if (segments.length < 2) {
-        // Just head
         ctx.fillStyle = 'rgba(136, 220, 240, 0.7)';
         ctx.beginPath();
         ctx.arc(b.x, b.y, BODY_WIDTH, 0, Math.PI * 2);
@@ -153,7 +146,6 @@ export class BackgroundBoids {
         continue;
       }
 
-      // Body
       ctx.strokeStyle = 'rgba(102, 204, 221, 0.55)';
       ctx.lineWidth = BODY_WIDTH;
       ctx.beginPath();
@@ -163,7 +155,6 @@ export class BackgroundBoids {
       }
       ctx.stroke();
 
-      // Head
       ctx.fillStyle = 'rgba(160, 230, 245, 0.9)';
       ctx.beginPath();
       ctx.arc(b.x, b.y, BODY_WIDTH * 0.9, 0, Math.PI * 2);

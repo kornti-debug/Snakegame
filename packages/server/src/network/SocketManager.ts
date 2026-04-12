@@ -109,7 +109,7 @@ export class SocketManager {
 
       socket.on('input:activate', (playerIndex) => {
         const snake = this.room.getSnake(socket.id, playerIndex);
-        if (snake) this.room.powerUpSystem.activateSlot(snake);
+        if (snake) this.room.powerUpSystem.activateSlot(snake, this.room.getAllSnakes());
       });
 
       socket.on('disconnect', () => {

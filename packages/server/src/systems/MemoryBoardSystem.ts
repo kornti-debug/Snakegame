@@ -130,7 +130,15 @@ export class MemoryBoardSystem {
         tileIds: [tileA, tileB],
         matched: false,
         matchedBy: null,
+        isBonus: false,
       });
+    }
+
+    // Elect one random pair as the bonus pair for this round. Matching it
+    // awards a random OP powerup to the matcher's item slot.
+    if (this.pairs.length > 0) {
+      const bonusIdx = Math.floor(Math.random() * this.pairs.length);
+      this.pairs[bonusIdx].isBonus = true;
     }
 
     // Build block-to-tile lookup table
@@ -257,6 +265,14 @@ export class MemoryBoardSystem {
     const snake = snakes.find(s => s.id === pair.matchedBy);
     if (snake) {
       snake.pairScore = current + 1;
+
+      // Bonus pair reward: queue a random OP powerup into the matcher's
+      // slot (overrides any pending item — the bonus beats the no-overwrite
+      // rule). The player still has to activate it to fire.
+      if (pair.isBonus) {
+        const bonusIds = ['time-freeze', 'lightning', 'cripple'];
+        snake.itemSlot = bonusIds[Math.floor(Math.random() * bonusIds.length)];
+      }
     }
 
     this.pendingEvents.push({
