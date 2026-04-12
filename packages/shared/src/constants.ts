@@ -47,6 +47,16 @@ export const PLAYER_COLORS = [
 /** Upper bound on concurrent players in the lobby (keyboard + phone). */
 export const MAX_PLAYERS = 10;
 
+/** Team palette (null team = solo / unassigned; otherwise index into this array). */
+export const TEAM_COLORS = [
+  '#FF5252', // red
+  '#448AFF', // blue
+  '#69F0AE', // green
+  '#FFD740', // yellow
+];
+export const TEAM_NAMES = ['Red', 'Blue', 'Green', 'Yellow'];
+export const NUM_TEAMS = TEAM_COLORS.length;
+
 // Memory card game — legacy constants (kept for any code still importing directly).
 // Prefer BoardConfig / BOARD_PRESETS below.
 export const MEMORY_TILE_COLS = 2;          // grid cells per tile horizontally

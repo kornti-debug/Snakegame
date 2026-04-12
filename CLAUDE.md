@@ -56,9 +56,9 @@ npm run dev:client
 - Lobby/menu system — main menu + instructions screen + exit confirm dialog, ambient flocking boids behind menus
 - Board preset picker in lobby (small / medium / large / huge) via keys 1-4 or [ / ]
 - Title: **SNAKE MEMORY**
-- **Phone-join (Phase 1)**: QR code in lobby points to `/phone.html`; phone clients act as virtual gamepads (tap-and-hold left/right zones → `input:turn`). Auto-allocates the lowest free slot (up to `MAX_PLAYERS` = 10, keyboard + phones mix). Phone has a Leave button (emits `player:leave`, kills snake + frees slot).
-- **Host controls**: ESC in-game pauses the game + opens a menu (R resume, Y exit, ESC/N resume). Shift+1-9/0 in the lobby kicks that slot. Phones can't trigger pause/kick (server gates via `phoneSockets`).
-- **Lobby**: player list (up to 10 rows) with per-row kind badge (keyboard / phone), ready state, and kick hint; board preset cards below.
+- **Phone-only input model**: the projector is host-only — no local keyboard players. All players join by scanning the lobby QR code (`/phone.html`). Phone has three screens: Join (name entry), Settings (in-lobby: name / color / team picker), Controller (tap-and-hold left/right zones while the game is running). Auto-switches between Settings ↔ Controller based on `gamePhase`. `MAX_PLAYERS` = 10.
+- **Teams**: `LobbyPlayer.team` (null = solo) + `player:set-team` event. 4 team colors defined in `TEAM_COLORS` / `TEAM_NAMES`. Shown as a colored dot on the lobby player row. Teams don't affect gameplay yet (reserved for a follow-up).
+- **Host controls (mouse + a few keys)**: lobby is mouse-driven — click a preset card to pick the board, click the red X on a player row to kick, click "START GAME" (or press Enter). ESC in-game pauses + opens a dialog (R resume, Y exit, ESC/N resume). ESC in the lobby returns to the main menu. Phones can't trigger pause/kick (server gates via `phoneSockets`).
 - **External REST API** (`/api/external/*`) for Touch Designer integration
 - **WebSocket namespace** (`/touchdesigner`) for real-time TD events
 - Tile image management (built-in SVG defaults + TD override via API)

@@ -60,6 +60,7 @@ export interface LobbyPlayer {
   color: string;
   ready: boolean;
   kind: 'keyboard' | 'phone';
+  team: number | null; // 0..NUM_TEAMS-1 or null = solo / unassigned
 }
 
 export interface GameSnapshot {

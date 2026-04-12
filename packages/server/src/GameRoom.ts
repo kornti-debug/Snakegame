@@ -64,6 +64,7 @@ export class GameRoom {
       color: PLAYER_COLORS[colorIdx],
       ready: false,
       kind,
+      team: null,
     });
   }
 
@@ -160,6 +161,13 @@ export class GameRoom {
   lobbySetName(socketId: string, playerIndex: number, name: string): void {
     const p = this.lobbyPlayers.get(`${socketId}:${playerIndex}`);
     if (p) p.name = name;
+  }
+
+  lobbySetTeam(socketId: string, playerIndex: number, team: number | null): void {
+    const p = this.lobbyPlayers.get(`${socketId}:${playerIndex}`);
+    if (!p) return;
+    if (team === null) { p.team = null; return; }
+    if (typeof team === 'number' && team >= 0 && team < 4) p.team = team;
   }
 
   getLobbyPlayers(): LobbyPlayer[] {

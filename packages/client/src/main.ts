@@ -1,18 +1,18 @@
 import { createSocket } from './network/ClientSocket.js';
 import { InterpolationBuffer } from './network/Interpolation.js';
 import { Renderer } from './rendering/Renderer.js';
-import { LobbyRenderer } from './rendering/LobbyRenderer.js';
+import { LobbyRenderer, type LobbyAction } from './rendering/LobbyRenderer.js';
 import { MainMenuRenderer } from './rendering/MainMenuRenderer.js';
 import { InstructionsRenderer } from './rendering/InstructionsRenderer.js';
 import { ConfirmDialogRenderer } from './rendering/ConfirmDialogRenderer.js';
 import { BackgroundBoids } from './rendering/BackgroundBoids.js';
 import { QrCache } from './rendering/QrCache.js';
-import { InputManager } from './input/InputManager.js';
-import { KeyboardProvider } from './input/KeyboardProvider.js';
 import type { GameSnapshot, BoardPreset } from '@snakegame/shared';
-import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS, DEFAULT_BOARD_PRESET } from '@snakegame/shared';
+import { ARENA_WIDTH, ARENA_HEIGHT, DEFAULT_BOARD_PRESET } from '@snakegame/shared';
 
-// --- Setup ---
+// Projector / host client. No local players — players join via phone QR.
+// Host actions are mouse-driven (lobby) plus a few keys (Enter, ESC, pause).
+
 const container = document.getElementById('game')!;
 
 const mainCanvas = document.createElement('canvas');
@@ -22,52 +22,36 @@ mainCanvas.style.width = '100%';
 mainCanvas.style.height = '100%';
 mainCanvas.style.objectFit = 'contain';
 mainCanvas.style.background = '#000';
+mainCanvas.style.cursor = 'default';
 container.appendChild(mainCanvas);
 
 const renderer = new Renderer(container, mainCanvas);
-const bgBoids = new BackgroundBoids(); // shared ambient swarm across menu + lobby
-// Phone-join URL: same origin + /phone. For this to work the projector must
-// be served from a LAN-reachable address (vite already listens on 0.0.0.0).
+const bgBoids = new BackgroundBoids();
 const phoneUrl = `${window.location.origin}/phone.html`;
 const qrCache = new QrCache(phoneUrl);
 const lobbyRenderer = new LobbyRenderer(mainCanvas, bgBoids, qrCache);
 const mainMenuRenderer = new MainMenuRenderer(mainCanvas, bgBoids);
 const instructionsRenderer = new InstructionsRenderer(mainCanvas);
 const confirmRenderer = new ConfirmDialogRenderer(mainCanvas);
-const inputManager = new InputManager();
 const buffer = new InterpolationBuffer();
 const socket = createSocket();
 
-// Client-side screen machine. Server phase ('lobby' | 'ingame') drives only
-// whether the game is actually running — the client overlays menus on top.
 type ClientScreen = 'main-menu' | 'instructions' | 'lobby' | 'ingame' | 'exit-confirm';
 let clientScreen: ClientScreen = 'main-menu';
+let latestSnapshot: GameSnapshot | null = null;
+let boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
 
 function setScreen(next: ClientScreen): void {
   if (next === clientScreen) return;
-  // Respawn the ambient swarm every time we arrive at the main menu so the
-  // viewer sees the flock form up fresh instead of an already-settled swarm.
   if (next === 'main-menu') bgBoids.reset();
-  // Clear stale reveal/background state whenever we start a fresh game
-  // session. Without this, the projector shows last session's carved reveals
-  // during the 3s "Round starting" countdown before round-start fires.
   if (next === 'ingame' && clientScreen !== 'exit-confirm') {
     renderer.resetRound();
   }
   clientScreen = next;
 }
-let latestSnapshot: GameSnapshot | null = null;
-let boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
-const joinedPlayers = new Set<number>();
-const PRESETS: BoardPreset[] = ['small', 'medium', 'large', 'huge'];
 
-// TODO(midi): register a MidiProvider alongside KeyboardProvider below.
-// (Phone clients don't register here — they have their own socket and send
-// input:turn directly. See packages/client/src/phone.ts.)
-
-// --- Keyboard routing ---
+// --- Keyboard (host only: menu nav, start, pause) ---
 window.addEventListener('keydown', (e) => {
-  // Pause overlay (host-only): resume, exit-to-menu, or dismiss.
   if (clientScreen === 'exit-confirm') {
     if (e.code === 'KeyY') {
       socket.emit('game:set-paused', false);
@@ -101,61 +85,9 @@ window.addEventListener('keydown', (e) => {
       setScreen('main-menu');
       return;
     }
-
-    // Shift + 1..9 / 0 kicks a slot (host-only; server gates this).
-    // 1..9 → slots 0..8, 0 → slot 9.
-    if (e.shiftKey) {
-      const kickMap: Record<string, number> = {
-        Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4,
-        Digit6: 5, Digit7: 6, Digit8: 7, Digit9: 8, Digit0: 9,
-        Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3, Numpad5: 4,
-        Numpad6: 5, Numpad7: 6, Numpad8: 7, Numpad9: 8, Numpad0: 9,
-      };
-      const slot = kickMap[e.code];
-      if (slot !== undefined) {
-        socket.emit('lobby:kick', slot);
-        if (slot === 0 || slot === 1) joinedPlayers.delete(slot);
-        return;
-      }
-    }
-
-    // Player 1 join: A or D
-    if ((e.code === 'KeyA' || e.code === 'KeyD') && !joinedPlayers.has(0)) {
-      joinedPlayers.add(0);
-      socket.emit('player:join', { name: 'Player 1', playerIndex: 0 });
-      inputManager.addProvider(new KeyboardProvider('wasd'));
-    }
-    // Player 2 join: Arrow keys
-    if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight') && !joinedPlayers.has(1)) {
-      joinedPlayers.add(1);
-      socket.emit('player:join', { name: 'Player 2', playerIndex: 1 });
-      inputManager.addProvider(new KeyboardProvider('arrows'));
-    }
-
-    // Color cycling
-    if (e.code === 'KeyW' && joinedPlayers.has(0)) cycleColor(0, -1);
-    if (e.code === 'KeyS' && joinedPlayers.has(0)) cycleColor(0, 1);
-    if (e.code === 'ArrowUp' && joinedPlayers.has(1)) cycleColor(1, -1);
-    if (e.code === 'ArrowDown' && joinedPlayers.has(1)) cycleColor(1, 1);
-
-    // Board preset: 1-4 picks a card directly; [ / ] still cycle as a fallback.
-    const digitMap: Record<string, BoardPreset> = {
-      Digit1: 'small', Digit2: 'medium', Digit3: 'large', Digit4: 'huge',
-      Numpad1: 'small', Numpad2: 'medium', Numpad3: 'large', Numpad4: 'huge',
-    };
-    const pickedByDigit = digitMap[e.code];
-    if (pickedByDigit) {
-      boardPreset = pickedByDigit;
-      socket.emit('lobby:set-config', { preset: boardPreset });
-    } else if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
-      const dir = e.code === 'BracketRight' ? 1 : -1;
-      const idx = (PRESETS.indexOf(boardPreset) + dir + PRESETS.length) % PRESETS.length;
-      boardPreset = PRESETS[idx];
-      socket.emit('lobby:set-config', { preset: boardPreset });
-    }
-
-    if (e.code === 'Enter' && joinedPlayers.size > 0) {
-      socket.emit('lobby:start-game');
+    if (e.code === 'Enter') {
+      const playerCount = latestSnapshot?.lobbyPlayers.length ?? 0;
+      if (playerCount >= 1) socket.emit('lobby:start-game');
     }
     return;
   }
@@ -169,11 +101,56 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-let colorIndices = [0, 1];
-function cycleColor(playerIndex: number, dir: number): void {
-  colorIndices[playerIndex] = (colorIndices[playerIndex] + dir + PLAYER_COLORS.length) % PLAYER_COLORS.length;
-  socket.emit('player:set-color', playerIndex, PLAYER_COLORS[colorIndices[playerIndex]]);
+// --- Mouse (lobby host actions) ---
+function canvasToArena(e: MouseEvent): { x: number; y: number } {
+  const rect = mainCanvas.getBoundingClientRect();
+  // The canvas is object-fit: contain inside its wrapper. Compute the actual
+  // drawn rect inside the element (letterboxed) and map from there.
+  const elAR = rect.width / rect.height;
+  const arenaAR = ARENA_WIDTH / ARENA_HEIGHT;
+  let drawW = rect.width, drawH = rect.height, offX = 0, offY = 0;
+  if (elAR > arenaAR) {
+    // pillarboxed
+    drawW = rect.height * arenaAR;
+    offX = (rect.width - drawW) / 2;
+  } else {
+    // letterboxed
+    drawH = rect.width / arenaAR;
+    offY = (rect.height - drawH) / 2;
+  }
+  const localX = e.clientX - rect.left - offX;
+  const localY = e.clientY - rect.top - offY;
+  return {
+    x: (localX / drawW) * ARENA_WIDTH,
+    y: (localY / drawH) * ARENA_HEIGHT,
+  };
 }
+
+mainCanvas.addEventListener('click', (e) => {
+  if (clientScreen !== 'lobby') return;
+  const { x, y } = canvasToArena(e);
+  const action: LobbyAction | null = lobbyRenderer.hit(x, y);
+  if (!action) return;
+  if (action.type === 'pick-preset') {
+    boardPreset = action.preset;
+    socket.emit('lobby:set-config', { preset: boardPreset });
+  } else if (action.type === 'kick') {
+    socket.emit('lobby:kick', action.slot);
+  } else if (action.type === 'start') {
+    const playerCount = latestSnapshot?.lobbyPlayers.length ?? 0;
+    if (playerCount >= 1) socket.emit('lobby:start-game');
+  }
+});
+
+// Change cursor over clickable zones for affordance.
+mainCanvas.addEventListener('mousemove', (e) => {
+  if (clientScreen !== 'lobby') {
+    mainCanvas.style.cursor = 'default';
+    return;
+  }
+  const { x, y } = canvasToArena(e);
+  mainCanvas.style.cursor = lobbyRenderer.hit(x, y) ? 'pointer' : 'default';
+});
 
 // --- Socket ---
 socket.on('connect', () => {
@@ -183,17 +160,14 @@ socket.on('connect', () => {
 socket.on('game:snapshot', (snapshot: GameSnapshot) => {
   latestSnapshot = snapshot;
 
-  // Sync server board preset to client (server is authoritative once set)
   if (snapshot.boardPreset) boardPreset = snapshot.boardPreset;
 
-  // Server state drives game screen transitions
   if (snapshot.gamePhase === 'ingame') {
     buffer.push(snapshot);
     if (clientScreen !== 'ingame' && clientScreen !== 'exit-confirm') {
       setScreen('ingame');
     }
   } else if (snapshot.gamePhase === 'lobby') {
-    // Returned to lobby from game (e.g. after exit confirm)
     if (clientScreen === 'ingame' || clientScreen === 'exit-confirm') {
       setScreen('main-menu');
     }
@@ -202,10 +176,6 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
 
 socket.on('game:reveal-update', (delta) => {
   renderer.applyRevealDelta(delta);
-});
-
-socket.on('game:player-died', ({ playerId, killerId }) => {
-  console.log(`[Game] Player ${playerId} died${killerId ? ` (killed by ${killerId})` : ''}`);
 });
 
 socket.on('game:round-start', ({ roundNumber, tiles }) => {
@@ -225,20 +195,7 @@ socket.on('game:round-end', ({ roundNumber, winner, pairScores }) => {
   }
 });
 
-socket.on('game:tile-captured', ({ tileId, capturedBy, symbolName }) => {
-  console.log(`[Game] Tile ${tileId} (${symbolName}) captured by ${capturedBy}`);
-});
-
-socket.on('game:pair-matched', ({ pairId, symbolName, matchedBy }) => {
-  console.log(`[Game] Pair ${pairId} (${symbolName}) matched by ${matchedBy}!`);
-});
-
-socket.on('game:hint-active', ({ pairId, symbolName }) => {
-  console.log(`[Game] Hint active for pair ${pairId} (${symbolName})`);
-});
-
-const lastTurnDirection: (-1 | 0 | 1)[] = [0, 0];
-
+// --- Game loop ---
 function gameLoop(): void {
   if (clientScreen === 'main-menu') {
     mainMenuRenderer.render();
@@ -248,23 +205,13 @@ function gameLoop(): void {
     const lobbyPlayers = latestSnapshot?.lobbyPlayers ?? [];
     lobbyRenderer.render(lobbyPlayers, boardPreset);
   } else {
-    // ingame or exit-confirm — both render the game, confirm overlays on top
-    for (const i of joinedPlayers) {
-      const input = inputManager.poll(i);
-      if (input && input.turnDirection !== lastTurnDirection[i]) {
-        socket.emit('input:turn', i, input.turnDirection);
-        lastTurnDirection[i] = input.turnDirection;
-      }
-    }
-
+    // ingame or exit-confirm
     const snapshot = buffer.interpolate(Date.now());
     if (snapshot) renderer.render(snapshot);
-
     if (clientScreen === 'exit-confirm') {
       confirmRenderer.render('Exit to main menu?');
     }
   }
-
   requestAnimationFrame(gameLoop);
 }
 

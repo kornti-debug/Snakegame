@@ -1,14 +1,13 @@
 import type { LobbyPlayer, BoardPreset } from '@snakegame/shared';
-import { ARENA_WIDTH, ARENA_HEIGHT, BOARD_PRESETS, MAX_PLAYERS } from '@snakegame/shared';
+import {
+  ARENA_WIDTH, ARENA_HEIGHT, BOARD_PRESETS, MAX_PLAYERS, TEAM_COLORS,
+} from '@snakegame/shared';
 import { BackgroundBoids } from './BackgroundBoids.js';
 import type { QrCache } from './QrCache.js';
 
 const PRESET_ORDER: BoardPreset[] = ['small', 'medium', 'large', 'huge'];
 
 // --- Layout constants ---
-// Two centered columns: player list (left) + right column (QR card over
-// the 2×2 board preset grid). All share the same card styling so the
-// QR no longer feels like a foreign element in the UI.
 const LIST_W = 720;
 const RIGHT_W = 360;
 const COL_GAP = 40;
@@ -20,10 +19,20 @@ const SECTION_TOP = 170;
 const LIST_ROW_H = 46;
 const LIST_ROW_GAP = 4;
 
-// Card accent colors used across the lobby UI.
 const CARD_BG = 'rgba(10, 12, 28, 0.72)';
-const CARD_STROKE = 'rgba(68, 170, 255, 0.4)';
 const CARD_STROKE_STRONG = '#44aaff';
+const CARD_STROKE = 'rgba(68, 170, 255, 0.4)';
+
+// --- Click dispatch types ---
+export type LobbyAction =
+  | { type: 'pick-preset'; preset: BoardPreset }
+  | { type: 'kick'; slot: number }
+  | { type: 'start' };
+
+interface HitZone {
+  x: number; y: number; w: number; h: number;
+  action: LobbyAction;
+}
 
 export class LobbyRenderer {
   private canvas: HTMLCanvasElement;
@@ -31,6 +40,7 @@ export class LobbyRenderer {
   private pulseTime = 0;
   private boids: BackgroundBoids;
   private qr?: QrCache;
+  private hitZones: HitZone[] = [];
 
   constructor(canvas: HTMLCanvasElement, boids?: BackgroundBoids, qr?: QrCache) {
     this.canvas = canvas;
@@ -39,9 +49,21 @@ export class LobbyRenderer {
     this.qr = qr;
   }
 
+  /** Hit-test in arena coords. Returns the action of the topmost zone
+   *  containing (x, y), or null if the click missed. */
+  hit(x: number, y: number): LobbyAction | null {
+    // Iterate in reverse so later-drawn zones win (not that they overlap today).
+    for (let i = this.hitZones.length - 1; i >= 0; i--) {
+      const z = this.hitZones[i];
+      if (x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) return z.action;
+    }
+    return null;
+  }
+
   render(players: LobbyPlayer[], boardPreset: BoardPreset = 'medium'): void {
     const ctx = this.ctx;
     this.pulseTime += 0.03;
+    this.hitZones = [];
 
     ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
     ctx.fillStyle = '#0a0a1a';
@@ -67,39 +89,22 @@ export class LobbyRenderer {
 
     ctx.font = '20px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText('Snake Memory  ·  gather players, pick a board', ARENA_WIDTH / 2, 130);
+    ctx.fillText('Snake Memory  ·  scan QR to join, pick a board', ARENA_WIDTH / 2, 130);
 
-    // --- Left column: player list ---
+    // Left: player list
     this.drawPlayerList(ctx, LIST_X, SECTION_TOP, LIST_W, players);
 
-    // --- Right column: QR card (top) + preset grid (bottom) ---
+    // Right: QR + preset grid
     const qrCardH = 400;
     this.drawQrCard(ctx, RIGHT_X, SECTION_TOP, RIGHT_W, qrCardH);
     this.drawPresetGrid(ctx, RIGHT_X, SECTION_TOP + qrCardH + 18, RIGHT_W, 340, boardPreset);
 
-    // --- Footer hints ---
-    const hintY = ARENA_HEIGHT - 100;
-    ctx.font = '16px monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.textAlign = 'center';
-    ctx.fillText(
-      'P1: A/D join · W/S color   ·   P2: ←/→ join · ↑/↓ color   ·   1-4: board   ·   Shift+1-9/0: kick',
-      ARENA_WIDTH / 2, hintY,
-    );
-
-    if (players.length >= 1) {
-      const startPulse = 0.7 + Math.sin(this.pulseTime * 4) * 0.3;
-      ctx.font = 'bold 26px monospace';
-      ctx.fillStyle = `rgba(68, 255, 68, ${startPulse})`;
-      ctx.fillText('Press ENTER to start', ARENA_WIDTH / 2, hintY + 36);
-    } else {
-      ctx.font = '16px monospace';
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      ctx.fillText('Waiting for a player to join…', ARENA_WIDTH / 2, hintY + 36);
-    }
+    // Footer: start button + hints
+    this.drawStartButton(ctx, players.length >= 1);
 
     ctx.font = '13px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.textAlign = 'center';
     ctx.fillText('ESC returns to main menu  ·  double-click for fullscreen', ARENA_WIDTH / 2, ARENA_HEIGHT - 24);
   }
 
@@ -110,7 +115,6 @@ export class LobbyRenderer {
     x: number, y: number, w: number,
     players: LobbyPlayer[],
   ): void {
-    // Wrapping card for visual grouping
     const header = 40;
     const body = MAX_PLAYERS * (LIST_ROW_H + LIST_ROW_GAP) - LIST_ROW_GAP;
     const pad = 18;
@@ -130,7 +134,6 @@ export class LobbyRenderer {
     ctx.textAlign = 'right';
     ctx.fillText(`${players.length} / ${MAX_PLAYERS}`, x + w - pad, y + pad + 20);
 
-    // Rows — always show all MAX_PLAYERS slots so the list doesn't jump.
     const sorted = [...players].sort((a, b) => a.index - b.index);
     const byIndex = new Map(sorted.map(p => [p.index, p]));
     const firstEmpty = Array.from({ length: MAX_PLAYERS }, (_, i) => i).find(i => !byIndex.has(i));
@@ -168,7 +171,7 @@ export class LobbyRenderer {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
-    // Slot number
+    // Slot #
     ctx.font = 'bold 16px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fillText(`${player.index + 1}`, x + pad, cy);
@@ -192,33 +195,70 @@ export class LobbyRenderer {
     ctx.fillStyle = player.color;
     ctx.fillText(player.name, x + pad + 58, cy);
 
-    // Kind badge + ready state (right-aligned stack)
+    // Team dot (beside name)
+    const nameWidth = ctx.measureText(player.name).width;
+    if (player.team !== null && player.team >= 0 && player.team < TEAM_COLORS.length) {
+      ctx.fillStyle = TEAM_COLORS[player.team];
+      ctx.beginPath();
+      ctx.arc(x + pad + 58 + nameWidth + 14, cy, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Kick X button (right edge)
+    const kickSize = 28;
+    const kickX = x + w - pad - kickSize;
+    const kickY = cy - kickSize / 2;
+    this.drawKickButton(ctx, kickX, kickY, kickSize);
+    this.hitZones.push({
+      x: kickX, y: kickY, w: kickSize, h: kickSize,
+      action: { type: 'kick', slot: player.index },
+    });
+
+    // Kind badge (between name area and kick button)
     const badgeText = player.kind === 'phone' ? 'PHONE' : 'KEYBOARD';
     const badgeBg = player.kind === 'phone' ? 'rgba(136, 221, 255, 0.18)' : 'rgba(136, 255, 136, 0.18)';
     const badgeFg = player.kind === 'phone' ? '#88ddff' : '#88ff88';
     ctx.font = 'bold 12px monospace';
     const badgeW = ctx.measureText(badgeText).width + 14;
     const badgeH = 22;
-
-    // Ready / kick hint takes the far-right corner
-    const readyText = player.ready ? 'READY' : `Shift+${(player.index + 1) % 10} kick`;
-    const readyColor = player.ready ? '#44ff44' : 'rgba(255,255,255,0.3)';
-    ctx.textAlign = 'right';
-    ctx.font = player.ready ? 'bold 14px monospace' : '12px monospace';
-    ctx.fillStyle = readyColor;
-    const readyX = x + w - pad;
-    ctx.fillText(readyText, readyX, cy);
-    const readyWidth = ctx.measureText(readyText).width;
-
-    // Badge sits before the ready text
-    const badgeX = readyX - readyWidth - 14 - badgeW;
+    const badgeX = kickX - 14 - badgeW;
     ctx.fillStyle = badgeBg;
     this.roundRect(ctx, badgeX, cy - badgeH / 2, badgeW, badgeH, 4);
     ctx.fill();
     ctx.fillStyle = badgeFg;
-    ctx.font = 'bold 12px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(badgeText, badgeX + badgeW / 2, cy);
+
+    // Ready tag (if ready) — sits before the badge
+    if (player.ready) {
+      ctx.font = 'bold 13px monospace';
+      ctx.fillStyle = '#44ff44';
+      ctx.textAlign = 'right';
+      ctx.fillText('READY', badgeX - 10, cy);
+    }
+  }
+
+  private drawKickButton(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 68, 68, 0.14)';
+    ctx.strokeStyle = 'rgba(255, 120, 120, 0.55)';
+    ctx.lineWidth = 1.5;
+    this.roundRect(ctx, x, y, size, size, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // X mark
+    ctx.strokeStyle = '#ff8888';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    const inset = 8;
+    ctx.beginPath();
+    ctx.moveTo(x + inset, y + inset);
+    ctx.lineTo(x + size - inset, y + size - inset);
+    ctx.moveTo(x + size - inset, y + inset);
+    ctx.lineTo(x + inset, y + size - inset);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawEmptyRow(
@@ -238,7 +278,6 @@ export class LobbyRenderer {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
-    // Slot number
     ctx.font = 'bold 16px monospace';
     ctx.fillStyle = isNext ? 'rgba(136, 221, 255, 0.6)' : 'rgba(255,255,255,0.2)';
     ctx.fillText(`${index + 1}`, x + pad, cy);
@@ -247,7 +286,7 @@ export class LobbyRenderer {
       const pulse = 0.45 + Math.sin(this.pulseTime * 3) * 0.25;
       ctx.font = '16px monospace';
       ctx.fillStyle = `rgba(136, 221, 255, ${pulse})`;
-      ctx.fillText('+  empty — press A/D or scan QR to join', x + pad + 40, cy);
+      ctx.fillText('+  empty — scan the QR code to join', x + pad + 40, cy);
     } else {
       ctx.font = '14px monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.18)';
@@ -266,7 +305,6 @@ export class LobbyRenderer {
     const pad = 18;
     const headerH = 40;
 
-    // Header
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     ctx.font = 'bold 22px monospace';
@@ -277,18 +315,15 @@ export class LobbyRenderer {
     ctx.fillStyle = 'rgba(136, 221, 255, 0.7)';
     ctx.fillText('point your phone camera at the code', x + w / 2, y + pad + 42);
 
-    // White QR tile — stays pure B/W for scanner reliability.
     const qrCanvas = this.qr?.getCanvas();
     const qrSize = Math.min(w - pad * 2 - 20, h - headerH - 80);
     const qrX = x + (w - qrSize) / 2;
     const qrY = y + pad + headerH + 18;
 
-    // Outer frame with a subtle blue border so it visually belongs to the UI.
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = CARD_STROKE;
     ctx.lineWidth = 2;
-    const frameR = 8;
-    this.roundRect(ctx, qrX - 6, qrY - 6, qrSize + 12, qrSize + 12, frameR);
+    this.roundRect(ctx, qrX - 6, qrY - 6, qrSize + 12, qrSize + 12, 8);
     ctx.fill();
     ctx.stroke();
 
@@ -302,16 +337,14 @@ export class LobbyRenderer {
       ctx.fillText('QR…', qrX + qrSize / 2, qrY + qrSize / 2);
     }
 
-    // URL (small, under QR)
     ctx.font = '11px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    const urlText = this.qr?.url.replace(/^https?:\/\//, '') ?? '';
-    ctx.fillText(urlText, x + w / 2, y + h - 14);
+    ctx.fillText(this.qr?.url.replace(/^https?:\/\//, '') ?? '', x + w / 2, y + h - 14);
   }
 
-  // --- Preset 2×2 grid ---
+  // --- Preset grid ---
 
   private drawPresetGrid(
     ctx: CanvasRenderingContext2D,
@@ -321,7 +354,6 @@ export class LobbyRenderer {
     this.drawCardShell(ctx, x, y, w, h);
 
     const pad = 18;
-    // Header
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     ctx.font = 'bold 22px monospace';
@@ -330,9 +362,8 @@ export class LobbyRenderer {
 
     ctx.font = '13px monospace';
     ctx.fillStyle = 'rgba(136, 221, 255, 0.7)';
-    ctx.fillText('press 1 – 4 to pick', x + w / 2, y + pad + 42);
+    ctx.fillText('click a card to choose', x + w / 2, y + pad + 42);
 
-    // 2×2 grid inside card
     const gridX = x + pad;
     const gridY = y + pad + 60;
     const gridW = w - pad * 2;
@@ -346,14 +377,15 @@ export class LobbyRenderer {
       const row = Math.floor(i / 2);
       const cx = gridX + col * (cellW + gap);
       const cy = gridY + row * (cellH + gap);
-      this.drawPresetCard(ctx, cx, cy, cellW, cellH, preset, preset === selected, i + 1);
+      this.drawPresetCard(ctx, cx, cy, cellW, cellH, preset, preset === selected);
+      this.hitZones.push({ x: cx, y: cy, w: cellW, h: cellH, action: { type: 'pick-preset', preset } });
     });
   }
 
   private drawPresetCard(
     ctx: CanvasRenderingContext2D,
     x: number, y: number, w: number, h: number,
-    preset: BoardPreset, selected: boolean, keyNum: number,
+    preset: BoardPreset, selected: boolean,
   ): void {
     const cfg = BOARD_PRESETS[preset];
 
@@ -367,22 +399,16 @@ export class LobbyRenderer {
     ctx.stroke();
     ctx.restore();
 
-    ctx.textAlign = 'left';
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.font = 'bold 11px monospace';
-    ctx.fillStyle = selected ? '#88ff88' : 'rgba(255,255,255,0.35)';
-    ctx.fillText(`[${keyNum}]`, x + 8, y + 8);
-
-    ctx.textAlign = 'right';
     ctx.font = 'bold 15px monospace';
     ctx.fillStyle = selected ? '#fff' : 'rgba(255,255,255,0.75)';
-    ctx.fillText(preset.toUpperCase(), x + w - 8, y + 6);
+    ctx.fillText(preset.toUpperCase(), x + w / 2, y + 10);
 
-    // Mini preview
     const prevX = x + 8;
-    const prevY = y + 30;
+    const prevY = y + 36;
     const prevW = w - 16;
-    const prevH = h - 52;
+    const prevH = h - 58;
     this.drawBoardPreview(ctx, prevX, prevY, prevW, prevH, cfg.cols, cfg.rows, selected);
 
     ctx.textAlign = 'center';
@@ -413,7 +439,45 @@ export class LobbyRenderer {
     }
   }
 
-  // --- Shared card shell + helpers ---
+  // --- Start button ---
+
+  private drawStartButton(ctx: CanvasRenderingContext2D, enabled: boolean): void {
+    const w = 340, h = 64;
+    const x = (ARENA_WIDTH - w) / 2;
+    const y = ARENA_HEIGHT - 120;
+
+    const pulse = 0.85 + Math.sin(this.pulseTime * 4) * 0.15;
+    ctx.save();
+    if (enabled) {
+      ctx.fillStyle = `rgba(68, 255, 68, ${0.14 * pulse})`;
+      ctx.strokeStyle = `rgba(68, 255, 68, ${pulse})`;
+      ctx.shadowColor = '#44ff44';
+      ctx.shadowBlur = 14;
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    }
+    ctx.lineWidth = 2.5;
+    this.roundRect(ctx, x, y, w, h, 12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 28px monospace';
+    ctx.fillStyle = enabled ? '#aaffaa' : 'rgba(255,255,255,0.35)';
+    ctx.fillText(enabled ? 'START GAME' : 'WAITING FOR PLAYERS…', x + w / 2, y + h / 2);
+
+    if (enabled) {
+      ctx.font = '12px monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillText('(click or press Enter)', x + w / 2, y + h + 14);
+      this.hitZones.push({ x, y, w, h, action: { type: 'start' } });
+    }
+  }
+
+  // --- Shared helpers ---
 
   private drawCardShell(
     ctx: CanvasRenderingContext2D,

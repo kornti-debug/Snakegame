@@ -49,6 +49,10 @@ export class SocketManager {
         this.room.lobbySetName(socket.id, playerIndex, name);
       });
 
+      socket.on('player:set-team', (playerIndex, team) => {
+        this.room.lobbySetTeam(socket.id, playerIndex, team);
+      });
+
       socket.on('lobby:start-game', () => {
         if (this.room.gamePhase === 'lobby') {
           this.room.startGame();

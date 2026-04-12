@@ -44,6 +44,7 @@ export interface ClientToServerEvents {
   'player:ready': (playerIndex: number) => void;
   'player:set-color': (playerIndex: number, color: string) => void;
   'player:set-name': (playerIndex: number, name: string) => void;
+  'player:set-team': (playerIndex: number, team: number | null) => void;
   'lobby:start-game': () => void;
   'lobby:return': () => void;
   'lobby:set-config': (payload: { preset: BoardPreset }) => void;

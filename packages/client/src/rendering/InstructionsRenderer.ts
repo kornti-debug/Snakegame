@@ -45,13 +45,15 @@ export class InstructionsRenderer {
     ]);
 
     this.drawSection(ctx, rightX, topY, colW, 'CONTROLS', [
-      'Player 1:   A / D  to turn',
-      '            W / S  to cycle color',
-      'Player 2:   ← / →  to turn',
-      '            ↑ / ↓  to cycle color',
-      'Host:       [ / ]  change board size',
-      'ENTER  start game    ESC  exit',
-      '(Gamepads supported — more coming)',
+      'Players:  join by scanning the QR',
+      '          code in the lobby with',
+      '          your phone.',
+      '          Pick name, color, team on',
+      '          the phone. Tap-and-hold',
+      '          left / right to steer.',
+      'Host:     click presets / kick X.',
+      '          ENTER to start, ESC to',
+      '          pause or go back.',
     ]);
 
     this.drawSection(ctx, leftX, topY + 360, colW, 'POWER-UPS', [

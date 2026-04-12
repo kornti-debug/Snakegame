@@ -1,38 +1,98 @@
 import { createSocket } from './network/ClientSocket.js';
+import type { GameSnapshot } from '@snakegame/shared';
+import { PLAYER_COLORS, TEAM_COLORS, TEAM_NAMES } from '@snakegame/shared';
 
-// Phone controller: virtual gamepad. Connects, requests a free slot, then
-// sends input:turn based on left/right tap-and-hold. No game rendering —
-// the player watches the projected arena.
+// Phone client. Three screens:
+//   1. join     — enter name, tap Join
+//   2. settings — lobby view: change name / color / team while waiting
+//   3. controller — two tap-and-hold zones, shown while the game is running
 
 const socket = createSocket();
 
 const statusDot = document.getElementById('status-dot')!;
 const statusText = document.getElementById('status-text')!;
-const joinScreen = document.getElementById('join-screen')!;
-const controller = document.getElementById('controller')!;
-const errorScreen = document.getElementById('error-screen')!;
-const errorMsg = document.getElementById('error-msg')!;
-const nameInput = document.getElementById('name-input') as HTMLInputElement;
-const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
-const padLeft = document.getElementById('pad-left')!;
-const padRight = document.getElementById('pad-right')!;
 const leaveBtn = document.getElementById('leave-btn') as HTMLButtonElement;
 
+const joinScreen = document.getElementById('join-screen')!;
+const settingsScreen = document.getElementById('settings-screen')!;
+const controllerScreen = document.getElementById('controller-screen')!;
+const errorScreen = document.getElementById('error-screen')!;
+const errorMsg = document.getElementById('error-msg')!;
+
+const nameInput = document.getElementById('name-input') as HTMLInputElement;
+const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
+
+const slotLabel = document.getElementById('slot-label')!;
+const settingsName = document.getElementById('settings-name') as HTMLInputElement;
+const colorRow = document.getElementById('color-row')!;
+const teamRow = document.getElementById('team-row')!;
+
+const padLeft = document.getElementById('pad-left')!;
+const padRight = document.getElementById('pad-right')!;
+
 let playerIndex: number | null = null;
-let playerColor = '#44aaff';
+let myName = '';
+let myColor = PLAYER_COLORS[0];
+let myTeam: number | null = null;
 let connected = false;
 let lastTurn: -1 | 0 | 1 = 0;
+type Screen = 'join' | 'settings' | 'controller' | 'error';
+let screen: Screen = 'join';
 
 function setStatus(text: string, ok: boolean): void {
   statusText.textContent = text;
   statusDot.classList.toggle('connected', ok);
 }
 
-function show(el: 'join' | 'controller' | 'error'): void {
-  joinScreen.classList.toggle('hidden', el !== 'join');
-  controller.classList.toggle('hidden', el !== 'controller');
-  errorScreen.style.display = el === 'error' ? 'flex' : 'none';
+function show(next: Screen): void {
+  screen = next;
+  for (const [id, el] of [
+    ['join', joinScreen], ['settings', settingsScreen],
+    ['controller', controllerScreen], ['error', errorScreen],
+  ] as const) {
+    el.classList.toggle('active', id === next);
+  }
 }
+
+function renderColorRow(): void {
+  colorRow.innerHTML = '';
+  for (const color of PLAYER_COLORS) {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (color === myColor ? ' selected' : '');
+    sw.style.background = color;
+    sw.addEventListener('click', () => {
+      if (playerIndex === null) return;
+      myColor = color;
+      socket.emit('player:set-color', playerIndex, color);
+      renderColorRow();
+    });
+    colorRow.appendChild(sw);
+  }
+}
+
+function renderTeamRow(): void {
+  teamRow.innerHTML = '';
+
+  const makeBtn = (label: string, color: string | null, team: number | null) => {
+    const btn = document.createElement('button');
+    btn.className = 'team-btn' + (team === myTeam ? ' selected' : '');
+    btn.innerHTML = color
+      ? `<span class="dot" style="background:${color}"></span>${label}`
+      : label;
+    btn.addEventListener('click', () => {
+      if (playerIndex === null) return;
+      myTeam = team;
+      socket.emit('player:set-team', playerIndex, team);
+      renderTeamRow();
+    });
+    teamRow.appendChild(btn);
+  };
+
+  makeBtn('Solo', null, null);
+  TEAM_COLORS.forEach((c, i) => makeBtn(TEAM_NAMES[i], c, i));
+}
+
+// --- Socket lifecycle ---
 
 socket.on('connect', () => {
   connected = true;
@@ -52,13 +112,14 @@ socket.on('disconnect', () => {
 
 socket.on('phone:joined', ({ playerIndex: idx, color }) => {
   playerIndex = idx;
-  playerColor = color;
-  setStatus(`Player ${idx + 1} · tap-and-hold to turn`, true);
-  controller.style.setProperty('--accent', color);
-  padLeft.style.borderColor = color;
-  padRight.style.borderColor = color;
+  myColor = color;
+  slotLabel.textContent = `Player ${idx + 1}`;
+  settingsName.value = myName;
+  setStatus(`Player ${idx + 1}`, true);
   leaveBtn.classList.add('visible');
-  show('controller');
+  renderColorRow();
+  renderTeamRow();
+  show('settings');
 });
 
 socket.on('phone:join-error', ({ reason }) => {
@@ -66,9 +127,23 @@ socket.on('phone:join-error', ({ reason }) => {
   show('error');
 });
 
+socket.on('game:snapshot', (snapshot: GameSnapshot) => {
+  if (playerIndex === null) return;
+  // Swap between settings (while lobby) and controller (while ingame).
+  if (snapshot.gamePhase === 'ingame' && screen !== 'controller') {
+    leaveBtn.classList.add('visible');
+    show('controller');
+  } else if (snapshot.gamePhase === 'lobby' && screen === 'controller') {
+    show('settings');
+  }
+});
+
+// --- Join + leave flow ---
+
 joinBtn.addEventListener('click', () => {
   if (!connected) return;
-  socket.emit('phone:join', { name: nameInput.value.trim() || undefined });
+  myName = nameInput.value.trim();
+  socket.emit('phone:join', { name: myName || undefined });
   joinBtn.disabled = true;
   joinBtn.textContent = 'Joining…';
 });
@@ -86,6 +161,16 @@ leaveBtn.addEventListener('click', () => {
   setStatus('Connected — join the game', true);
   show('join');
 });
+
+// --- Settings name live sync ---
+
+settingsName.addEventListener('input', () => {
+  if (playerIndex === null) return;
+  myName = settingsName.value.trim();
+  socket.emit('player:set-name', playerIndex, myName || `Player ${playerIndex + 1}`);
+});
+
+// --- Controller pads ---
 
 function sendTurn(dir: -1 | 0 | 1): void {
   if (playerIndex === null || dir === lastTurn) return;
@@ -123,7 +208,6 @@ function bindPad(el: HTMLElement): void {
 bindPad(padLeft);
 bindPad(padRight);
 
-// Prevent pull-to-refresh / double-tap zoom / page scroll
 document.body.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
 socket.connect();

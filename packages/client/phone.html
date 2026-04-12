@@ -18,7 +18,7 @@
     }
     #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
     #status {
-      padding: 14px 16px;
+      padding: 12px 16px;
       font-size: 14px;
       background: rgba(255,255,255,0.04);
       border-bottom: 1px solid rgba(255,255,255,0.08);
@@ -31,7 +31,7 @@
       transition: background 0.2s;
     }
     #status-dot.connected { background: #44ff44; }
-    #status-text { flex: 1; }
+    #status-text { flex: 1; font-size: 13px; }
     #leave-btn {
       display: none;
       padding: 6px 14px; font-size: 13px;
@@ -40,20 +40,18 @@
       color: #ff8888;
       border-radius: 6px;
       font-family: inherit;
-      cursor: pointer;
     }
     #leave-btn.visible { display: inline-block; }
-    #join-screen, #controller, #error-screen {
-      flex: 1; display: flex; flex-direction: column;
+
+    .screen { flex: 1; display: none; flex-direction: column; padding: 20px; overflow-y: auto; }
+    .screen.active { display: flex; }
+
+    /* --- Join screen --- */
+    #join-screen {
       align-items: center; justify-content: center;
-      padding: 24px;
     }
-    #join-screen h1, #error-screen h1 {
-      font-size: 32px; margin-bottom: 8px; text-align: center;
-    }
-    #join-screen p, #error-screen p {
-      font-size: 16px; opacity: 0.6; margin-bottom: 32px; text-align: center;
-    }
+    #join-screen h1 { font-size: 30px; margin-bottom: 6px; }
+    #join-screen p { font-size: 15px; opacity: 0.55; margin-bottom: 28px; text-align: center; }
     #name-input {
       width: 100%; max-width: 360px;
       padding: 14px 16px; font-size: 18px;
@@ -71,10 +69,61 @@
       cursor: pointer; font-family: inherit;
     }
     #join-btn:disabled { opacity: 0.5; }
-    #controller {
-      padding: 0; flex-direction: row; gap: 4px;
-      background: #000;
+
+    /* --- Settings screen --- */
+    #settings-screen h2 {
+      font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px;
+      color: rgba(136, 221, 255, 0.7); margin: 20px 0 10px;
     }
+    #settings-screen h2:first-of-type { margin-top: 4px; }
+    .big-label { font-size: 22px; font-weight: bold; margin-bottom: 18px; }
+    .big-label .slot { color: #88ddff; }
+    #settings-name {
+      width: 100%;
+      padding: 12px 14px; font-size: 17px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      color: #fff;
+      font-family: inherit;
+    }
+    .swatch-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .swatch {
+      width: 44px; height: 44px; border-radius: 8px;
+      border: 2px solid rgba(255,255,255,0.15);
+      transition: transform 0.08s, border-color 0.08s;
+    }
+    .swatch.selected {
+      border-color: #fff;
+      transform: scale(1.08);
+    }
+    .team-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .team-btn {
+      padding: 10px 16px; font-size: 14px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.7);
+      border-radius: 8px;
+      font-family: inherit;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .team-btn .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .team-btn.selected {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border-color: rgba(255,255,255,0.5);
+    }
+    #settings-footer {
+      margin-top: auto;
+      padding-top: 16px;
+      text-align: center;
+      color: rgba(255,255,255,0.45);
+      font-size: 14px;
+      font-style: italic;
+    }
+
+    /* --- Controller --- */
+    #controller-screen { padding: 0; flex-direction: row; gap: 4px; background: #000; }
     .pad {
       flex: 1; height: 100%;
       display: flex; align-items: center; justify-content: center;
@@ -85,8 +134,11 @@
       transition: background 0.08s;
     }
     .pad.active { background: rgba(68, 255, 68, 0.35); border-color: #44ff44; }
-    #error-screen { display: none; }
-    .hidden { display: none !important; }
+
+    /* --- Error --- */
+    #error-screen { align-items: center; justify-content: center; }
+    #error-screen h1 { font-size: 28px; margin-bottom: 8px; }
+    #error-screen p { font-size: 15px; opacity: 0.55; }
   </style>
 </head>
 <body>
@@ -96,17 +148,35 @@
       <div id="status-text">Connecting…</div>
       <button id="leave-btn">Leave</button>
     </div>
-    <div id="join-screen">
+
+    <div id="join-screen" class="screen active">
       <h1>Snake Memory</h1>
       <p>Join the game as a player</p>
       <input id="name-input" placeholder="Your name" maxlength="16" />
       <button id="join-btn" disabled>Join</button>
     </div>
-    <div id="controller" class="hidden">
+
+    <div id="settings-screen" class="screen">
+      <div class="big-label">You are <span class="slot" id="slot-label">Player ?</span></div>
+
+      <h2>Name</h2>
+      <input id="settings-name" maxlength="16" />
+
+      <h2>Color</h2>
+      <div id="color-row" class="swatch-row"></div>
+
+      <h2>Team</h2>
+      <div id="team-row" class="team-row"></div>
+
+      <div id="settings-footer">waiting for host to start the game…</div>
+    </div>
+
+    <div id="controller-screen" class="screen">
       <div class="pad" id="pad-left">◀</div>
       <div class="pad" id="pad-right">▶</div>
     </div>
-    <div id="error-screen">
+
+    <div id="error-screen" class="screen">
       <h1>Can't join</h1>
       <p id="error-msg"></p>
     </div>
