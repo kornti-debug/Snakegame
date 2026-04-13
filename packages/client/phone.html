@@ -12,13 +12,24 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
     html, body {
-      width: 100%; height: 100%; overflow: hidden;
+      width: 100%;
+      /* iOS Safari's vh resolves to the smaller viewport (address-bar
+         visible) and doesn't re-flow when the bar hides. dvh tracks the
+         visible viewport live. Older browsers fall back to vh. */
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
       background: #0a0a1a;
       color: #fff;
       font-family: -apple-system, system-ui, sans-serif;
       overscroll-behavior: none;
     }
-    #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      display: flex; flex-direction: column;
+    }
 
     /* ---- Rotate-to-landscape hint ---- */
     #rotate-hint {
@@ -165,6 +176,37 @@
     }
     #join-btn:disabled { opacity: 0.5; }
 
+    /* Add-to-Home-Screen banner. Hidden by default; shown only on iOS
+       Safari when the page is not already in standalone (PWA) mode. */
+    #a2hs-banner {
+      display: none;
+      max-width: 380px;
+      margin-bottom: 18px;
+      padding: 12px 14px;
+      background: rgba(68, 170, 255, 0.1);
+      border: 1px solid rgba(68, 170, 255, 0.45);
+      border-radius: 10px;
+      color: #cce5ff;
+      font-size: 13px;
+      line-height: 1.45;
+      text-align: left;
+    }
+    #a2hs-banner.visible { display: block; }
+    #a2hs-banner strong { color: #fff; display: block; margin-bottom: 4px; font-size: 14px; }
+    #a2hs-banner .steps {
+      margin-top: 6px;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+      font-size: 12px;
+      opacity: 0.85;
+    }
+    #a2hs-banner .glyph {
+      display: inline-block;
+      padding: 2px 6px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
     /* ---- Settings (landscape: 2-column) ---- */
     #settings-screen {
       flex-direction: row;
@@ -305,7 +347,9 @@
     }
     body.controller-mode #status {
       position: absolute;
-      top: 0; left: 0; right: 0;
+      top: env(safe-area-inset-top, 0);
+      left: env(safe-area-inset-left, 0);
+      right: env(safe-area-inset-right, 0);
       background: linear-gradient(to bottom, rgba(10, 12, 28, 0.55), rgba(10, 12, 28, 0));
       backdrop-filter: blur(3px);
       -webkit-backdrop-filter: blur(3px);
@@ -335,22 +379,25 @@
     }
     body.controller-mode .pad {
       position: absolute;
-      top: 0; bottom: 0;
+      /* Avoid the notch (top), home-indicator (bottom) and rounded
+         corners (sides) on iPhones so the full tap area is actually
+         reachable. env() fallback is 0 on devices without insets. */
+      top: env(safe-area-inset-top, 0);
+      bottom: env(safe-area-inset-bottom, 0);
       width: 26%;
       background: rgba(68, 170, 255, 0.08);
       border: 1px solid rgba(68, 170, 255, 0.22);
       border-radius: 0;
       color: rgba(255,255,255,0.35);
       z-index: 5;
-      /* Inner padding so finger doesn't brush the extreme edge. */
     }
     body.controller-mode .pad.active {
       background: rgba(68, 255, 68, 0.18);
       border-color: rgba(68, 255, 68, 0.6);
       color: rgba(255,255,255,0.85);
     }
-    body.controller-mode #pad-left { left: 0; border-right-width: 1px; }
-    body.controller-mode #pad-right { right: 0; border-left-width: 1px; }
+    body.controller-mode #pad-left  { left:  env(safe-area-inset-left, 0);  border-right-width: 1px; }
+    body.controller-mode #pad-right { right: env(safe-area-inset-right, 0); border-left-width: 1px; }
 
     /* Debuff hit flash: a full-screen pulse overlay that fades out. */
     #debuff-flash {
@@ -375,8 +422,10 @@
     /* ---- Item slot overlay (bottom-right, near the right pad) ---- */
     body.controller-mode #slot-overlay {
       position: absolute;
-      bottom: 20px;
-      right: 28%;              /* sits just inside the right pad's inner edge */
+      /* Right pad is at `env(safe-area-inset-right, 0)` and 26% wide, so
+         the slot sits just inside that with a small gap. */
+      right: calc(26% + env(safe-area-inset-right, 0) + 12px);
+      bottom: calc(20px + env(safe-area-inset-bottom, 0));
       z-index: 8;
       display: flex;
       align-items: center;
@@ -476,6 +525,15 @@
     <div id="join-screen" class="screen active">
       <h1>Snake Memory</h1>
       <p>Join the game as a player</p>
+      <div id="a2hs-banner">
+        <strong>iPhone users — one-time setup</strong>
+        For proper fullscreen, tap the Share button, then choose <em>Add to Home Screen</em>, and open Snake Memory from your home screen.
+        <div class="steps">
+          <span class="glyph">⬆</span> Share
+          <span>→</span>
+          <span class="glyph">＋</span> Add to Home Screen
+        </div>
+      </div>
       <input id="name-input" placeholder="Your name" maxlength="16" />
       <button id="join-btn" disabled>Join</button>
     </div>

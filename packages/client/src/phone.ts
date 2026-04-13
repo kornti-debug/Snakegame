@@ -449,6 +449,15 @@ function bindPad(el: HTMLElement): void {
     el.classList.remove('active');
     pressState();
   };
+  // Pointer Events first — modern unified path for touch + mouse + stylus.
+  // Covers iOS PWA edge cases where the raw touch-event path isn't
+  // routed to listeners. pointerup/cancel fire even if the pointer
+  // leaves the element.
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+  el.addEventListener('pointerleave', up);
+  // Legacy fallbacks for browsers / modes that don't dispatch pointer events.
   el.addEventListener('touchstart', down, { passive: false });
   el.addEventListener('touchend', up, { passive: false });
   el.addEventListener('touchcancel', up, { passive: false });
@@ -466,6 +475,22 @@ document.body.addEventListener('touchmove', (e) => e.preventDefault(), { passive
 // allowed immediately on page load (before any show() call).
 show('join');
 
+// Show Add-to-Home-Screen hint on iOS Safari (not when running standalone
+// via Add-to-Home-Screen already, not on other platforms). Without this,
+// iOS users run in chrome-y Safari which steals viewport from the
+// controller layout and sometimes puts controls behind the tab bar.
+(function showA2HSIfNeeded(): void {
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua)
+             || (navigator.platform === 'MacIntel' && (navigator as unknown as { maxTouchPoints?: number }).maxTouchPoints! > 1);
+  const nav = navigator as unknown as { standalone?: boolean };
+  const isStandalone = nav.standalone === true
+                    || window.matchMedia('(display-mode: standalone)').matches;
+  if (isIOS && !isStandalone) {
+    document.getElementById('a2hs-banner')?.classList.add('visible');
+  }
+})();
+
 // --- Arena follow-cam render loop ---
 // Keeps the visible canvas sized to its displayed box (respecting DPR) and
 // draws a camera window each frame while we're in the Controller screen.
@@ -477,6 +502,18 @@ function resizeArenaCanvas(): void {
   if (arenaCanvas.width !== targetW) arenaCanvas.width = targetW;
   if (arenaCanvas.height !== targetH) arenaCanvas.height = targetH;
 }
+
+// iOS reports stale viewport dimensions between an orientation change
+// and the next paint. Kicking resize once on these events makes the
+// canvas and any absolute-positioned elements pick up the new geometry
+// within a frame or two.
+function scheduleResize(): void {
+  // Two rAFs: the first lets layout settle, the second does the resize.
+  requestAnimationFrame(() => requestAnimationFrame(resizeArenaCanvas));
+}
+window.addEventListener('orientationchange', scheduleResize);
+window.addEventListener('resize', scheduleResize);
+window.visualViewport?.addEventListener('resize', scheduleResize);
 
 function arenaFrame(): void {
   requestAnimationFrame(arenaFrame);
