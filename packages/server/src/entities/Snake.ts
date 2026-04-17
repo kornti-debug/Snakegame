@@ -35,6 +35,7 @@ export class Snake {
   crippled = false;
   team: number | null = null;
   playerIndex = 0;
+  isDisconnected = false;              // owning socket is in grace window
   itemSlot: string | null = null;      // queued active powerup id (if any)
   activeEffect: string | null = null;  // currently-running active powerup id
   // Passive stacks — per-round counts that shape the baseline stats below.
@@ -208,6 +209,7 @@ export class Snake {
       activeEffect: this.activeEffect,
       passiveStacks: this.passiveStacks,
       effectDrain: this.effectDrain,
+      isDisconnected: this.isDisconnected,
     };
   }
 

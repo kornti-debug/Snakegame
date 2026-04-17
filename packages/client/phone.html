@@ -61,6 +61,38 @@
     #rotate-hint h1 { font-size: 22px; margin-bottom: 8px; }
     #rotate-hint p  { font-size: 14px; opacity: 0.6; max-width: 320px; }
 
+    /* ---- Reconnecting overlay ---- */
+    #reconnecting-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(10, 10, 26, 0.82);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 2000;
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      color: #fff;
+      text-align: center;
+      padding: 24px;
+    }
+    body.reconnecting #reconnecting-overlay { display: flex; }
+    #reconnecting-overlay .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #44aaff;
+      border-radius: 50%;
+      animation: rcSpin 0.9s linear infinite;
+      margin-bottom: 18px;
+    }
+    @keyframes rcSpin { to { transform: rotate(360deg); } }
+    #reconnecting-overlay .title {
+      font-size: 18px; font-weight: bold; letter-spacing: 0.4px;
+    }
+    #reconnecting-overlay .sub {
+      margin-top: 4px;
+      font-size: 13px; opacity: 0.65;
+    }
+
     /* ---- Status bar ---- */
     #status {
       padding: 8px 14px;
@@ -497,6 +529,15 @@
     <div class="icon"></div>
     <h1>Rotate your phone</h1>
     <p>Snake Memory plays better in landscape. Turn your phone sideways to continue.</p>
+  </div>
+
+  <!-- Reconnecting overlay: shown whenever the socket is disconnected
+       and we had an active player slot. Full-screen so it's visible on
+       top of the controller arena + status bar alike. -->
+  <div id="reconnecting-overlay">
+    <div class="spinner"></div>
+    <div class="title">Reconnecting…</div>
+    <div class="sub">hang on — keeping your snake alive</div>
   </div>
 
   <div id="app">

@@ -22,7 +22,10 @@ export function drawSnake(ctx: CanvasRenderingContext2D, snake: SnakeState): voi
 
   animTime += 0.02;
 
-  const baseAlpha = !snake.alive ? 0.3 : 1;
+  // Dim snakes whose owner is in the reconnect grace window — the server
+  // keeps them on the field so the slot isn't lost to a brief wifi drop,
+  // but the visual cue tells spectators the player isn't driving.
+  const baseAlpha = !snake.alive ? 0.3 : snake.isDisconnected ? 0.45 : 1;
   const drain = snake.effectDrain ?? {};
 
   // Determine which effect is active and its drain

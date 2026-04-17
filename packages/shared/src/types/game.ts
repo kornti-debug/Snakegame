@@ -30,6 +30,10 @@ export interface SnakeState {
   passiveStacks: Record<string, number>; // passive powerup id → stack count (this round)
   // Active effect drain: 1.0 = just started, 0.0 = expired. Null = no effect.
   effectDrain: Record<string, number>;  // effectId → remaining fraction (0..1)
+  // True while the owning socket is in the disconnect grace window. The
+  // snake keeps its place on the field but accepts no input; removed at
+  // grace-expiry if the phone never reclaims.
+  isDisconnected: boolean;
 }
 
 export interface RevealDelta {
@@ -69,6 +73,9 @@ export interface LobbyPlayer {
   ready: boolean;
   kind: 'keyboard' | 'phone';
   team: number | null; // 0..NUM_TEAMS-1 or null = solo / unassigned
+  // Stable per-device ID for reclaiming the slot after a socket drop.
+  // Set for phone joins (from localStorage); absent for local/keyboard.
+  clientId?: string;
 }
 
 export interface GameSnapshot {

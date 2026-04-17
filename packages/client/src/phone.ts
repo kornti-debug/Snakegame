@@ -1,4 +1,4 @@
-import { createSocket } from './network/ClientSocket.js';
+import { createPhoneSocket } from './network/ClientSocket.js';
 import type { GameSnapshot, LobbyPlayer, MemoryTile, RevealDelta } from '@snakegame/shared';
 import { PLAYER_COLORS, TEAM_COLORS, TEAM_NAMES, ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
 import { PhoneArenaRenderer } from './rendering/PhoneArenaRenderer.js';
@@ -8,7 +8,27 @@ import { PhoneArenaRenderer } from './rendering/PhoneArenaRenderer.js';
 //   2. settings — lobby view: change name / color / team while waiting
 //   3. controller — two tap-and-hold zones, shown while the game is running
 
-const socket = createSocket();
+const socket = createPhoneSocket();
+
+// Persistent per-device id. Lets the server re-link us to our snake/slot
+// after a transient wifi drop without losing score or position.
+const CLIENT_ID_KEY = 'snakemem:clientId';
+function getOrCreateClientId(): string {
+  try {
+    const existing = localStorage.getItem(CLIENT_ID_KEY);
+    if (existing) return existing;
+    const fresh = (crypto.randomUUID?.() ?? `c-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    localStorage.setItem(CLIENT_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    // Private-mode / disabled storage: fall back to a per-session id —
+    // reclaim won't work across reloads but still survives drops within
+    // the same tab.
+    return `mem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+const clientId = getOrCreateClientId();
+let hasJoinedBefore = false;    // set true on first successful phone:joined
 
 const statusDot = document.getElementById('status-dot')!;
 const statusText = document.getElementById('status-text')!;
@@ -221,17 +241,32 @@ function renderTeamRow(): void {
 
 socket.on('connect', () => {
   connected = true;
-  setStatus('Connected — join the game', true);
-  joinBtn.disabled = false;
+  // Clear the Reconnecting overlay — the actual game state may still
+  // need a moment to sync via reclaim, but the transport is back.
+  document.body.classList.remove('reconnecting');
+  // If we had a slot before the drop, try to reclaim it silently. The
+  // server answers with phone:reclaim-result (ok or not).
+  if (hasJoinedBefore) {
+    socket.emit('phone:reclaim', { clientId });
+    setStatus('Reconnecting…', true);
+  } else {
+    setStatus('Connected — join the game', true);
+    joinBtn.disabled = false;
+  }
 });
 
 socket.on('disconnect', () => {
   connected = false;
-  setStatus('Disconnected', false);
   joinBtn.disabled = true;
   if (playerIndex !== null) {
-    playerIndex = null;
-    show('join');
+    // Keep the player state in memory and surface a full-screen
+    // "Reconnecting…" overlay — the socket.io client is already trying
+    // to reconnect in the background, and the server is holding our
+    // snake during its grace window.
+    document.body.classList.add('reconnecting');
+    setStatus('Reconnecting…', false);
+  } else {
+    setStatus('Disconnected', false);
   }
 });
 
@@ -239,6 +274,7 @@ socket.on('phone:joined', ({ playerIndex: idx, color }) => {
   playerIndex = idx;
   myColor = color;
   myReady = false;
+  hasJoinedBefore = true;
   slotLabel.textContent = `Player ${idx + 1}`;
   settingsName.value = myName;
   setStatus(`Player ${idx + 1}`, true);
@@ -247,6 +283,28 @@ socket.on('phone:joined', ({ playerIndex: idx, color }) => {
   renderTeamRow();
   renderReadyBtn();
   show('settings');
+});
+
+socket.on('phone:reclaim-result', (res) => {
+  if (res.ok) {
+    // Same slot as before — UI-wise nothing to re-show; the ingame
+    // snapshot handler will flip back to the right screen.
+    playerIndex = res.playerIndex;
+    myColor = res.color;
+    hasJoinedBefore = true;
+    setStatus(`Player ${res.playerIndex + 1}`, true);
+  } else {
+    // Server has no record of us (grace window expired, or server
+    // restarted). Fall back to a fresh join — keep the name the user
+    // typed so they don't retype.
+    playerIndex = null;
+    hasJoinedBefore = false;
+    setStatus('Connected — join the game', true);
+    joinBtn.disabled = false;
+    joinBtn.textContent = 'Join';
+    leaveBtn.classList.remove('visible');
+    show('join');
+  }
 });
 
 socket.on('phone:join-error', ({ reason }) => {
@@ -362,7 +420,7 @@ function renderPassiveRow(stacks: Record<string, number>): void {
 joinBtn.addEventListener('click', () => {
   if (!connected) return;
   myName = nameInput.value.trim();
-  socket.emit('phone:join', { name: myName || undefined });
+  socket.emit('phone:join', { name: myName || undefined, clientId });
   joinBtn.disabled = true;
   joinBtn.textContent = 'Joining…';
   // Must happen inside the tap handler to satisfy the user-gesture rule.
@@ -403,6 +461,7 @@ leaveBtn.addEventListener('click', () => {
   if (playerIndex === null) return;
   socket.emit('player:leave', playerIndex);
   playerIndex = null;
+  hasJoinedBefore = false;
   lastTurn = 0;
   myReady = false;
   padLeft.classList.remove('active');
