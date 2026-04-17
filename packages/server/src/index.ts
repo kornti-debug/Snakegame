@@ -39,6 +39,13 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', players: room.snakeCount });
 });
 
+// Serve the built client bundle so the whole app runs on one port in
+// production. Mounted AFTER the API routes above so they take priority.
+// In local dev, Vite on :5173 is the user-facing origin and this static
+// mount is harmless — nothing requests index.html from :3000 there.
+const clientDist = path.resolve(__dirname, '..', '..', 'client', 'dist');
+app.use(express.static(clientDist));
+
 httpServer.listen(PORT, () => {
   console.log(`[Server] Running on http://localhost:${PORT}`);
   if (API_KEY) {

@@ -40,8 +40,9 @@ npm run dev:client
 - Collision system (snake-vs-snake, snake-vs-wall, self-collision, snake-vs-obstacle, snake-vs-boid)
 - Ghost mode (pass through snakes/boids, semi-transparent rendering)
 - Auto-respawn after 2 seconds
-- Keyboard input (WASD + Arrows for 2 players)
-- Gamepad input provider (ready, not actively used yet)
+- **Mixed-input lobby**: any combination of phones + local inputs fills the 10 player slots. Local inputs are **opt-in** — each device self-registers the first time it's used, and auto-readies server-side (no "tap when ready" step for locals). Bindings: `wasd` (A/D turn, W powerup), `arrows` (◀/▶ turn, ▲ powerup), `gamepad-0` (left stick + A button), `midi-0` (DDJ-400 jog wheel + play/pause). Click the X on a lobby row to kick a slot; the device can re-register by being used again.
+- **MIDI controller** via `MidiProvider` (Web MIDI API). Default mapping for Pioneer DDJ-400: jog wheel = CC 34 ch 1, play/pause = note 11 ch 1. Jog wheel uses pulse-decay (turn state resets ~120ms after no new impulses). `?midi-debug=1` URL flag logs all incoming MIDI messages to the console for remapping. **Requires a secure origin** (localhost or HTTPS) — Web MIDI is gated by the Secure Contexts spec.
+- `input:activate` (edge-triggered, one-shot on rising edge) replaces `input:boost` across all local inputs and matches the phone's slot-card tap. `input:boost` is vestigial.
 - Canvas rendering with bezier curve snakes + eyes
 - 5-canvas layer stack (background tiles, reveal mask, tile overlay, game objects, UI)
 - **Memory card game** mechanic (configurable board: small 4×3/6 pairs → huge 7×6/20 pairs, 90% capture threshold, same-snake matching)
@@ -58,7 +59,8 @@ npm run dev:client
 - Lobby/menu system — main menu + instructions screen + exit confirm dialog, ambient flocking boids behind menus
 - Board preset picker in lobby (small / medium / large / huge) via keys 1-4 or [ / ]
 - Title: **SNAKE MEMORY**
-- **Phone-only input model**: the projector is host-only — no local keyboard players. All players join by scanning the lobby QR code (`/phone.html`). Phone has three screens: Join (name entry, portrait OK), Settings (in-lobby: name / color / team picker + Ready button, landscape), Controller (left/right pads + follow-cam canvas of the arena centered on the player's snake, landscape). Auto-switches between Settings ↔ Controller based on `gamePhase`. `MAX_PLAYERS` = 10.
+- **Phone join via QR** (`/phone.html`). Phone has three screens: Join (name entry, portrait OK), Settings (in-lobby: name / color / team picker + Ready button, landscape), Controller (left/right pads + follow-cam canvas of the arena centered on the player's snake, landscape). Auto-switches between Settings ↔ Controller based on `gamePhase`. `MAX_PLAYERS` = 10.
+- **Phone reconnect resilience**: server holds dropped phones in a 10s grace window instead of evicting immediately. Phone persists a `clientId` in `localStorage['snakemem:clientId']`, includes it in `phone:join`, and emits `phone:reclaim({clientId})` on reconnect — if the slot is still in grace, the new socket is re-keyed to the existing lobby entry + live snake (score/position/color preserved). Snakes in grace render dimmed on the projector. `pingInterval: 10s` / `pingTimeout: 20s` on the socket.io server for faster drop detection. `createPhoneSocket()` uses an explicit `reconnection` config (500ms → 3s backoff, infinite attempts). Full-screen "Reconnecting…" overlay appears on the phone while the socket is down.
 - **Phone follow-cam**: `PhoneArenaRenderer` reuses the projector's `BackgroundLayer` / `RevealLayer` / `TileOverlayLayer` / `GameLayer` classes to composite a 1920×1080 arena buffer, then blits a camera-centered window to the visible canvas. Camera follows the phone's own snake (matched via `SnakeState.playerIndex`), clamped to arena bounds. Zoom is fixed at `CAMERA_VIEW_HEIGHT = 540` arena pixels tall; width derived from canvas aspect.
 - **Teams**: `LobbyPlayer.team` / `SnakeState.team` (null = solo) + `player:set-team` event. 4 team colors defined in `TEAM_COLORS` / `TEAM_NAMES`. Shown as a colored dot on the lobby player row and as a **team-colored halo ring around the snake's head** in-game. Teams don't affect gameplay yet (reserved for a follow-up).
 - **Host controls (mouse + a few keys)**: lobby is mouse-driven — click a preset card to pick the board, click the red X on a player row to kick, click "START GAME" (or press Enter). ESC in-game pauses + opens a dialog (R resume, Y exit, ESC/N resume). ESC in the lobby returns to the main menu. Phones can't trigger pause/kick (server gates via `phoneSockets`).
@@ -75,9 +77,7 @@ npm run dev:client
 - Visual polish — capture/match animations, death effects
 - Sound effects
 - Stream overlay data
-- Powerup slot system (1 active slot + stacking passives, manual activation button, "Steering" passive)
-- Input expansion: gamepad auto-detect, MIDI provider
-- Phone-join Phase 2+: larger arena enabled by per-player phone view; overlay pad buttons on top of the arena canvas instead of as side columns; active-powerup button (tied to future powerup slot system).
+- Cloud deployment on the campus PaaS (single-instance — server serves client static + socket.io on one port over HTTPS)
 
 ## External API (Touch Designer)
 
