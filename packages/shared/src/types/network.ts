@@ -3,6 +3,11 @@ import type { GameSnapshot, RevealDelta, MemoryTile, BoardPreset } from './game.
 export interface ServerToClientEvents {
   'phone:joined': (payload: { playerIndex: number; color: string }) => void;
   'phone:join-error': (payload: { reason: string }) => void;
+  'phone:reclaim-result': (
+    payload: { ok: true; playerIndex: number; color: string } | { ok: false },
+  ) => void;
+  'host:joined': (payload: { playerIndex: number; color: string; binding?: string }) => void;
+  'host:join-error': (payload: { reason: string; binding?: string }) => void;
   'game:snapshot': (snapshot: GameSnapshot) => void;
   'game:reveal-update': (delta: RevealDelta) => void;
   'game:player-died': (payload: { playerId: string; killerId: string | null }) => void;
@@ -51,7 +56,9 @@ export interface ClientToServerEvents {
   'lobby:set-config': (payload: { preset: BoardPreset }) => void;
   'lobby:kick': (slotIndex: number) => void;
   'game:set-paused': (paused: boolean) => void;
-  'phone:join': (payload: { name?: string }) => void;
+  'phone:join': (payload: { name?: string; clientId?: string }) => void;
+  'phone:reclaim': (payload: { clientId: string }) => void;
+  'host:join-local': (payload: { name?: string; binding?: string }) => void;
 }
 
 export interface InterServerEvents {}

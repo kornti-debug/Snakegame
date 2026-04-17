@@ -4,11 +4,12 @@ import type { InputProvider } from './InputProvider.js';
 interface KeyBindings {
   left: string;
   right: string;
+  activate: string;
 }
 
 const PRESETS: Record<string, KeyBindings> = {
-  wasd: { left: 'KeyA', right: 'KeyD' },
-  arrows: { left: 'ArrowLeft', right: 'ArrowRight' },
+  wasd:   { left: 'KeyA',      right: 'KeyD',          activate: 'KeyW' },
+  arrows: { left: 'ArrowLeft', right: 'ArrowRight',    activate: 'ArrowUp' },
 };
 
 export class KeyboardProvider implements InputProvider {
@@ -42,12 +43,13 @@ export class KeyboardProvider implements InputProvider {
   poll(): InputState {
     const left = this.keys.has(this.bindings.left);
     const right = this.keys.has(this.bindings.right);
+    const activate = this.keys.has(this.bindings.activate);
 
     let turnDirection: -1 | 0 | 1 = 0;
     if (left && !right) turnDirection = -1;
     else if (right && !left) turnDirection = 1;
 
-    return { turnDirection, boost: false };
+    return { turnDirection, boost: false, activate };
   }
 
   destroy(): void {

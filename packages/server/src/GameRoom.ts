@@ -45,6 +45,12 @@ export class GameRoom {
   // host-only actions so only the projector (keyboard) client can control them.
   private phoneSockets = new Set<string>();
 
+  // Grace-period eviction timers, keyed by the dead socketId. Lets a
+  // dropped phone reconnect within the window and reclaim its slot + snake
+  // via phone:reclaim. Cleared if reclaim succeeds or the timer fires.
+  private disconnectTimers = new Map<string, NodeJS.Timeout>();
+  static readonly DISCONNECT_GRACE_MS = 10_000;
+
   paused = false;
 
   pendingEvents: GameEvent[] = [];
@@ -55,7 +61,7 @@ export class GameRoom {
 
   // --- Lobby ---
 
-  lobbyJoin(socketId: string, playerIndex: number, name: string, kind: 'keyboard' | 'phone' = 'keyboard'): void {
+  lobbyJoin(socketId: string, playerIndex: number, name: string, kind: 'keyboard' | 'phone' = 'keyboard', clientId?: string): void {
     const key = `${socketId}:${playerIndex}`;
     const taken = new Set([...this.lobbyPlayers.values()].map(p => p.color.toUpperCase()));
     const freeColor = PLAYER_COLORS.find(c => !taken.has(c.toUpperCase()))
@@ -67,24 +73,114 @@ export class GameRoom {
       ready: false,
       kind,
       team: null,
+      clientId,
     });
   }
 
   /** Allocate the lowest free global slot (0..MAX-1) for a phone client.
    *  Returns { index, color } or null if full. Registers the phone as
    *  a normal lobby player under its own socket. */
-  phoneJoin(socketId: string, name: string = 'Phone', maxSlots: number = MAX_PLAYERS): { index: number; color: string } | null {
+  phoneJoin(socketId: string, name: string = 'Phone', clientId?: string, maxSlots: number = MAX_PLAYERS): { index: number; color: string } | null {
     if (this.gamePhase !== 'lobby') return null;
     const used = new Set<number>();
     for (const p of this.lobbyPlayers.values()) used.add(p.index);
     for (let i = 0; i < maxSlots; i++) {
       if (used.has(i)) continue;
-      this.lobbyJoin(socketId, i, name, 'phone');
+      this.lobbyJoin(socketId, i, name, 'phone', clientId);
       this.phoneSockets.add(socketId);
       const joined = this.lobbyPlayers.get(`${socketId}:${i}`);
       return { index: i, color: joined?.color ?? PLAYER_COLORS[i % PLAYER_COLORS.length] };
     }
     return null;
+  }
+
+  /** Allocate a slot for a local (keyboard/gamepad/midi) host player.
+   *  Same allocation rules as phoneJoin, but the socket is NOT marked as
+   *  a phone, so host-only controls (pause/kick) keep working. Local
+   *  players auto-ready: the act of pressing a key is the opt-in, no
+   *  separate "tap when ready" step. */
+  localJoin(socketId: string, name: string = 'Host', maxSlots: number = MAX_PLAYERS): { index: number; color: string } | null {
+    if (this.gamePhase !== 'lobby') return null;
+    const used = new Set<number>();
+    for (const p of this.lobbyPlayers.values()) used.add(p.index);
+    for (let i = 0; i < maxSlots; i++) {
+      if (used.has(i)) continue;
+      this.lobbyJoin(socketId, i, name, 'keyboard');
+      const joined = this.lobbyPlayers.get(`${socketId}:${i}`);
+      if (joined) joined.ready = true;
+      return { index: i, color: joined?.color ?? PLAYER_COLORS[i % PLAYER_COLORS.length] };
+    }
+    return null;
+  }
+
+  /** Move a socket into the grace window: keep its lobby entries and
+   *  snakes in place (so the snake continues to render), zero their input,
+   *  and schedule hard removal after DISCONNECT_GRACE_MS. A matching
+   *  phone:reclaim within the window cancels the timer and rekeys the
+   *  state under the new socket id. */
+  markSocketDisconnected(socketId: string): void {
+    const playerMap = this.players.get(socketId);
+    if (playerMap) {
+      for (const snake of playerMap.values()) {
+        snake.turnDirection = 0;
+        snake.boosting = false;
+        snake.isDisconnected = true;
+      }
+    }
+    // Host-only gates depend on phoneSockets; clear it so a reclaiming
+    // phone re-adds itself on the new socket id.
+    this.phoneSockets.delete(socketId);
+
+    const existing = this.disconnectTimers.get(socketId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      this.disconnectTimers.delete(socketId);
+      this.removeAllPlayers(socketId);
+      console.log(`[GameRoom] Orphan expired: ${socketId.slice(0, 6)}`);
+    }, GameRoom.DISCONNECT_GRACE_MS);
+    this.disconnectTimers.set(socketId, timer);
+  }
+
+  /** Try to reclaim the orphaned slot(s) tagged with this clientId under
+   *  a new socket id. Returns the primary slot's index/color, or null if
+   *  nothing is available to reclaim. */
+  reclaim(newSocketId: string, clientId: string): { index: number; color: string } | null {
+    // Find the orphaned socketId (still in disconnectTimers) whose lobby
+    // entries carry this clientId.
+    let matchedOldSocketId: string | null = null;
+    let matchedLobbyPlayer: LobbyPlayer | null = null;
+    for (const [key, p] of this.lobbyPlayers) {
+      if (p.clientId !== clientId) continue;
+      const oldSocketId = key.split(':')[0];
+      if (!this.disconnectTimers.has(oldSocketId)) continue;
+      matchedOldSocketId = oldSocketId;
+      matchedLobbyPlayer = p;
+      break;
+    }
+    if (!matchedOldSocketId || !matchedLobbyPlayer) return null;
+
+    // Cancel the eviction timer covering all slots on this old socket.
+    const timer = this.disconnectTimers.get(matchedOldSocketId);
+    if (timer) clearTimeout(timer);
+    this.disconnectTimers.delete(matchedOldSocketId);
+
+    // Rekey all lobby entries old→new.
+    for (const [k, lp] of [...this.lobbyPlayers]) {
+      if (!k.startsWith(`${matchedOldSocketId}:`)) continue;
+      this.lobbyPlayers.delete(k);
+      this.lobbyPlayers.set(`${newSocketId}:${lp.index}`, lp);
+    }
+    // Move snakes map + clear the disconnected flag.
+    const oldPlayerMap = this.players.get(matchedOldSocketId);
+    if (oldPlayerMap) {
+      this.players.delete(matchedOldSocketId);
+      this.players.set(newSocketId, oldPlayerMap);
+      for (const snake of oldPlayerMap.values()) {
+        snake.isDisconnected = false;
+      }
+    }
+    this.phoneSockets.add(newSocketId);
+    return { index: matchedLobbyPlayer.index, color: matchedLobbyPlayer.color };
   }
 
   isPhoneSocket(socketId: string): boolean {

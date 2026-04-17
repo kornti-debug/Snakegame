@@ -19,6 +19,12 @@ export class SocketManager {
   constructor(httpServer: HttpServer, private room: GameRoom, apiKey: string = '') {
     this.io = new Server(httpServer, {
       cors: { origin: '*' },
+      // Tighter heartbeat than the 25s/60s defaults so flaky-wifi drops
+      // are detected within ~20s instead of a minute. Phone clients with
+      // matching reconnection config will rejoin well inside our 10s
+      // server-side grace window.
+      pingInterval: 10_000,
+      pingTimeout: 20_000,
     });
 
     // --- Game client namespace (default /) ---
@@ -60,14 +66,50 @@ export class SocketManager {
         }
       });
 
-      socket.on('phone:join', ({ name }) => {
-        const result = this.room.phoneJoin(socket.id, name?.trim() || `Phone ${socket.id.slice(0, 4)}`);
+      socket.on('phone:join', ({ name, clientId }) => {
+        const result = this.room.phoneJoin(
+          socket.id,
+          name?.trim() || `Phone ${socket.id.slice(0, 4)}`,
+          clientId,
+        );
         if (!result) {
           socket.emit('phone:join-error', { reason: 'Lobby full or game in progress' });
           return;
         }
         socket.emit('phone:joined', { playerIndex: result.index, color: result.color });
         console.log(`[Phone] Joined as slot ${result.index + 1} (${socket.id.slice(0, 6)})`);
+      });
+
+      socket.on('phone:reclaim', ({ clientId }) => {
+        if (!clientId) {
+          socket.emit('phone:reclaim-result', { ok: false });
+          return;
+        }
+        const result = this.room.reclaim(socket.id, clientId);
+        if (!result) {
+          socket.emit('phone:reclaim-result', { ok: false });
+          return;
+        }
+        socket.emit('phone:reclaim-result', {
+          ok: true,
+          playerIndex: result.index,
+          color: result.color,
+        });
+        console.log(`[Phone] Reclaimed slot ${result.index + 1} (${socket.id.slice(0, 6)})`);
+      });
+
+      socket.on('host:join-local', ({ name, binding }) => {
+        if (this.room.gamePhase !== 'lobby') {
+          socket.emit('host:join-error', { reason: 'Game already in progress', binding });
+          return;
+        }
+        const result = this.room.localJoin(socket.id, name?.trim() || 'Host');
+        if (!result) {
+          socket.emit('host:join-error', { reason: 'Lobby full', binding });
+          return;
+        }
+        socket.emit('host:joined', { playerIndex: result.index, color: result.color, binding });
+        console.log(`[Host] Local player joined slot ${result.index + 1} via ${binding ?? 'host'} (${socket.id.slice(0, 6)})`);
       });
 
       socket.on('lobby:set-config', ({ preset }) => {
@@ -114,7 +156,9 @@ export class SocketManager {
 
       socket.on('disconnect', () => {
         console.log(`[Socket] Disconnected: ${socket.id}`);
-        this.room.removeAllPlayers(socket.id);
+        // Don't remove immediately — give the phone a chance to reconnect
+        // and reclaim its slot. Grace-expiry hard-removes if no reclaim.
+        this.room.markSocketDisconnected(socket.id);
       });
     });
 

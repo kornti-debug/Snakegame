@@ -19,7 +19,7 @@ export class GamepadProvider implements InputProvider {
 
   poll(): InputState {
     const gp = navigator.getGamepads()[this.gamepadIndex];
-    if (!gp) return { turnDirection: 0, boost: false };
+    if (!gp) return { turnDirection: 0, boost: false, activate: false };
 
     // Left stick X axis
     const x = gp.axes[0] ?? 0;
@@ -28,11 +28,10 @@ export class GamepadProvider implements InputProvider {
     if (x < -this.deadzone) turnDirection = -1;
     else if (x > this.deadzone) turnDirection = 1;
 
-    // A button or right trigger for boost
-    const boost = (gp.buttons[0]?.pressed ?? false) ||
-                  (gp.buttons[7]?.value ?? 0) > 0.5;
+    // A-face button (Xbox A / PlayStation X) = powerup activate.
+    const activate = gp.buttons[0]?.pressed ?? false;
 
-    return { turnDirection, boost };
+    return { turnDirection, boost: false, activate };
   }
 
   destroy(): void {
