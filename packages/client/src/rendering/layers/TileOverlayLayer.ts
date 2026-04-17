@@ -19,15 +19,21 @@ export class TileOverlayLayer {
     this.pulseTime += 0.03;
 
     const hintedPairIds = new Set(hints.map(h => h.pairId));
+    const neutralPairIds = new Set(
+      board.pairs.filter(p => p.neutralized && !p.matched).map(p => p.pairId),
+    );
 
     for (const tile of board.tiles) {
       const pair = board.pairs.find(p => p.pairId === tile.pairId);
       const isMatched = pair?.matched ?? false;
+      const isNeutral = neutralPairIds.has(tile.pairId);
       const isHinted = hintedPairIds.has(tile.pairId);
       const isBonus = pair?.isBonus ?? false;
 
       if (isMatched) {
         this.drawMatchedTile(ctx, tile);
+      } else if (isNeutral && tile.capturedBy) {
+        this.drawNeutralizedTile(ctx, tile);
       } else if (tile.capturedBy) {
         this.drawCapturedTile(ctx, tile);
       } else {
@@ -60,20 +66,17 @@ export class TileOverlayLayer {
     const pulse = 0.5 + Math.sin(this.pulseTime * 6) * 0.5;
     const cx = x + width / 2;
     const cy = y + height / 2;
-    const r = Math.max(width, height) * 0.55;
 
     ctx.save();
-    // Radial glow that pulses
-    const grad = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
-    grad.addColorStop(0, `rgba(255, 215, 0, ${0.25 + pulse * 0.35})`);
-    grad.addColorStop(1, 'rgba(255, 215, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(x - 10, y - 10, width + 20, height + 20);
+    ctx.strokeStyle = '#e6c200';
+    ctx.lineWidth = 2 + pulse * 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.roundRect(x - 2, y - 2, width + 4, height + 4, 14);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
-    // Pulsing crown glyph centered above tile
-    ctx.fillStyle = `rgba(255, 215, 0, ${0.7 + pulse * 0.3})`;
-    ctx.shadowColor = '#FFD700';
-    ctx.shadowBlur = 12 + pulse * 10;
+    ctx.fillStyle = '#ffd54a';
     ctx.font = `bold ${36 + pulse * 6}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -89,22 +92,23 @@ export class TileOverlayLayer {
 
     ctx.save();
     ctx.strokeStyle = brightColor;
-    ctx.lineWidth = 6;
-    ctx.shadowColor = brightColor;
-    ctx.shadowBlur = 20;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.roundRect(x + 2, y + 2, width - 4, height - 4, 12);
     ctx.stroke();
     ctx.restore();
 
-    // "MATCHED" label + symbol name in snake's color
+    // "MATCHED" label + symbol name in snake's color (outlined pill)
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
     const labelW = 120;
     const labelH = 40;
+    const lx = x + width / 2 - labelW / 2;
+    const ly = y + height - labelH - 6;
+    ctx.strokeStyle = brightColor;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(x + width / 2 - labelW / 2, y + height - labelH - 6, labelW, labelH, 6);
-    ctx.fill();
+    ctx.roundRect(lx, ly, labelW, labelH, 6);
+    ctx.stroke();
 
     ctx.font = 'bold 12px monospace';
     ctx.textAlign = 'center';
@@ -117,6 +121,28 @@ export class TileOverlayLayer {
     ctx.restore();
   }
 
+  /** Split capture — pair cannot be matched */
+  private drawNeutralizedTile(ctx: CanvasRenderingContext2D, tile: MemoryTile): void {
+    const { x, y, width, height } = tile;
+    const color = tile.capturedColor ?? '#8899aa';
+
+    ctx.save();
+    ctx.strokeStyle = '#a8b4c8';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.roundRect(x + 2, y + 2, width - 4, height - 4, 12);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = color;
+    ctx.fillText('SPLIT', x + width / 2, y + 6);
+    ctx.restore();
+  }
+
   /** Captured tile: snake's color border with glow */
   private drawCapturedTile(ctx: CanvasRenderingContext2D, tile: MemoryTile): void {
     const { x, y, width, height } = tile;
@@ -124,20 +150,23 @@ export class TileOverlayLayer {
 
     ctx.save();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 4;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.roundRect(x + 2, y + 2, width - 4, height - 4, 12);
     ctx.stroke();
     ctx.restore();
 
-    // "CAPTURED" label
+    // "CAPTURED" label (outline)
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    const capW = 96;
+    const capH = 22;
+    const cx0 = x + width / 2 - capW / 2;
+    const cy0 = y + 4;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(x + width / 2 - 48, y + 4, 96, 22, 4);
-    ctx.fill();
+    ctx.roundRect(cx0, cy0, capW, capH, 4);
+    ctx.stroke();
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -151,7 +180,7 @@ export class TileOverlayLayer {
     const { x, y, width, height } = tile;
 
     ctx.save();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.strokeStyle = '#8a9cad';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.roundRect(x + 1, y + 1, width - 2, height - 2, 12);
@@ -162,7 +191,7 @@ export class TileOverlayLayer {
   /**
    * Per-snake reveal breakdown: horizontal stacked bar at the bottom of the tile.
    * Each snake's contribution is shown as a segment in their color.
-   * A vertical marker shows the 90% capture threshold.
+   * A vertical marker shows the capture threshold.
    */
   private drawRevealBreakdown(ctx: CanvasRenderingContext2D, tile: MemoryTile): void {
     const { x, y, width, height, revealBySnake } = tile;
@@ -171,12 +200,13 @@ export class TileOverlayLayer {
     const barX = x + 8;
     const barW = width - 16;
 
-    // Background
+    // Bar outline
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.strokeStyle = '#4a5568';
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect(barX - 1, barY - 1, barW + 2, barH + 2, 3);
-    ctx.fill();
+    ctx.stroke();
 
     // Get total blocks in tile (approximate from percentage)
     const totalRevealed = Object.values(revealBySnake).reduce((sum, n) => sum + n, 0);
@@ -206,9 +236,9 @@ export class TileOverlayLayer {
       offsetX += segW;
     }
 
-    // 90% threshold marker
+    // Capture-threshold marker (see MEMORY_CAPTURE_THRESHOLD).
     const thresholdX = barX + barW * MEMORY_CAPTURE_THRESHOLD;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.strokeStyle = '#c8d4e8';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([2, 2]);
     ctx.beginPath();
@@ -221,7 +251,7 @@ export class TileOverlayLayer {
     ctx.font = 'bold 11px monospace';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillStyle = '#e8eef8';
     ctx.fillText(`${Math.floor(tile.revealPercent)}%`, x + width - 6, barY + barH / 2);
 
     ctx.restore();
@@ -233,10 +263,8 @@ export class TileOverlayLayer {
     const pulse = Math.sin(this.pulseTime * 4) * 0.5 + 0.5;
 
     ctx.save();
-    ctx.strokeStyle = `rgba(255, 215, 0, ${0.4 + pulse * 0.6})`;
+    ctx.strokeStyle = '#e6c200';
     ctx.lineWidth = 3 + pulse * 2;
-    ctx.shadowColor = '#FFD700';
-    ctx.shadowBlur = 10 + pulse * 10;
     ctx.setLineDash([8, 4]);
     ctx.beginPath();
     ctx.roundRect(x - 1, y - 1, width + 2, height + 2, 14);

@@ -19,7 +19,20 @@ export const REVEAL_BRUSH_RADIUS = 20; // pixels - how wide the snake reveals
 // Round system
 export const ROUND_DURATION = 90_000;       // ms - how long a round lasts
 export const ROUND_WAIT_TIME = 5_000;       // ms - countdown before round starts
-export const ROUND_END_DISPLAY_TIME = 4_000; // ms - show scoreboard after round
+export const ROUND_END_DISPLAY_TIME = 6_000; // ms - show winner before returning to main menu
+
+// Turbo / brake pads (DDJ-400 hot cues etc.)
+// Turbo: held button that multiplies snake.speed, up to TURBO_MAX_MS of
+// continuous use before forced release + cooldown. Cooldown also applies
+// on early release to discourage mashing.
+export const TURBO_MULTIPLIER = 1.75;   // speed multiplier while turbo held
+export const TURBO_MAX_MS = 2_000;      // max continuous turbo time
+export const TURBO_COOLDOWN_MS = 500;   // cooldown after release / exhaustion
+// Brake: on press, snake speed is clamped to 0 for BRAKE_DURATION_MS.
+// Turning is unaffected (players can aim while braked). Cooldown starts
+// after the effect ends.
+export const BRAKE_DURATION_MS = 500;
+export const BRAKE_COOLDOWN_MS = 2_000;
 
 // Power-ups
 export const POWERUP_SPAWN_INTERVAL = 8_000; // ms between spawns
@@ -68,19 +81,20 @@ export const MEMORY_BOARD_COLS = 5;
 export const MEMORY_BOARD_ROWS = 4;
 export const MEMORY_PAIR_COUNT = 10;
 export const MEMORY_TILE_COUNT = 20;
-export const MEMORY_CAPTURE_THRESHOLD = 0.9;
+export const MEMORY_CAPTURE_THRESHOLD = 0.8;
 
 // Runtime-configurable board presets. Host picks one in the lobby.
 export const BOARD_PRESETS = {
-  small:  { cols: 4, rows: 3, pairCount: 6,  tileWidth: 240, tileHeight: 240, gap: 8, captureThreshold: 0.9 },
-  medium: { cols: 5, rows: 4, pairCount: 10, tileWidth: 240, tileHeight: 240, gap: 8, captureThreshold: 0.9 },
-  large:  { cols: 6, rows: 5, pairCount: 15, tileWidth: 200, tileHeight: 200, gap: 8, captureThreshold: 0.9 },
-  huge:   { cols: 7, rows: 6, pairCount: 20, tileWidth: 160, tileHeight: 160, gap: 8, captureThreshold: 0.9 },
+  small:  { cols: 4, rows: 3, pairCount: 6,  tileWidth: 240, tileHeight: 240, gap: 8, captureThreshold: 0.8 },
+  medium: { cols: 5, rows: 4, pairCount: 10, tileWidth: 240, tileHeight: 240, gap: 8, captureThreshold: 0.8 },
+  large:  { cols: 6, rows: 5, pairCount: 15, tileWidth: 200, tileHeight: 200, gap: 8, captureThreshold: 0.8 },
+  huge:   { cols: 7, rows: 6, pairCount: 20, tileWidth: 160, tileHeight: 160, gap: 8, captureThreshold: 0.8 },
 } as const;
 export const DEFAULT_BOARD_PRESET = 'medium';
 export const DEFAULT_BOARD_CONFIG = BOARD_PRESETS.medium;
 export const HINT_DURATION = 8_000;         // ms hint highlight lasts
-export const ROUND_DURATION_MEMORY = 120_000; // ms — longer rounds for memory
+/** Unused: memory rounds end on pair outcomes (see RoundManager / GameRoom). */
+export const ROUND_DURATION_MEMORY = 120_000;
 
 // Boid / AI swarm system
 export const BOID_COUNT_INITIAL = 12;         // starting boids

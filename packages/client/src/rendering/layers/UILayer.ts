@@ -16,7 +16,7 @@ export class UILayer {
 
   showWinner(name: string, score: number): void {
     this.winnerDisplay = { name, score };
-    this.winnerTimer = 4000;
+    this.winnerTimer = 6000;
   }
 
   render(snapshot: GameSnapshot): void {
@@ -25,23 +25,25 @@ export class UILayer {
 
     const { round } = snapshot;
 
-    // Round timer (top center)
-    this.drawRoundInfo(ctx, round.phase, round.roundNumber, round.timeRemainingMs);
+    this.drawRoundInfo(ctx, round.phase, round.roundNumber);
 
     // Player scores — pair-based (top-left)
     this.drawScores(ctx, snapshot);
 
-    // Match progress (top-right)
-    const totalPairs = snapshot.memoryBoard.pairs.length;
-    const matchedCount = snapshot.memoryBoard.pairs.filter(p => p.matched).length;
+    const pairs = snapshot.memoryBoard.pairs;
+    const totalPairs = pairs.length;
+    const matchedCount = pairs.filter(p => p.matched).length;
+    const neutralCount = pairs.filter(p => p.neutralized).length;
+    const pending = pairs.filter(p => !p.matched && !p.neutralized).length;
     ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'right';
-    this.textWithShadow(ctx, `Pairs: ${matchedCount}/${totalPairs}`, ARENA_WIDTH - 20, 34, '#FFD700');
-
-    // Reveal percentage (top-right, below pairs)
-    const pct = snapshot.revealPercentage.toFixed(1);
-    ctx.font = 'bold 16px monospace';
-    this.textWithShadow(ctx, `Revealed: ${pct}%`, ARENA_WIDTH - 20, 58, 'rgba(255,255,255,0.6)');
+    this.textWithShadow(
+      ctx,
+      `Pairs: ${matchedCount} won · ${neutralCount} split · ${pending} open / ${totalPairs}`,
+      ARENA_WIDTH - 20,
+      34,
+      '#FFD700',
+    );
 
     // Powerup legend (bottom-right)
     if (round.phase === 'playing') {
@@ -56,26 +58,22 @@ export class UILayer {
       this.winnerDisplay = null;
     }
 
-    // Waiting overlay
+    // Pre-round countdown — only used at the start of the (single) round.
     if (round.phase === 'waiting') {
-      this.drawCenterMessage(ctx, `Round ${round.roundNumber + 1} starting in ${Math.ceil(round.timeRemainingMs / 1000)}...`);
+      const s = Math.ceil(round.timeRemainingMs / 1000);
+      this.drawCenterMessage(ctx, `Starting in ${s}…`);
     }
   }
 
-  private drawRoundInfo(ctx: CanvasRenderingContext2D, phase: string, roundNum: number, timeMs: number): void {
+  private drawRoundInfo(ctx: CanvasRenderingContext2D, phase: string, _roundNum: number): void {
     ctx.textAlign = 'center';
 
     if (phase === 'playing') {
-      const secs = Math.ceil(timeMs / 1000);
-      const min = Math.floor(secs / 60);
-      const sec = secs % 60;
-      const timeStr = `${min}:${sec.toString().padStart(2, '0')}`;
-
-      ctx.font = 'bold 28px monospace';
-      this.textWithShadow(ctx, `Round ${roundNum}  —  ${timeStr}`, ARENA_WIDTH / 2, 38, '#fff');
+      ctx.font = 'bold 26px monospace';
+      this.textWithShadow(ctx, `Win on pairs!`, ARENA_WIDTH / 2, 38, '#fff');
     } else if (phase === 'ended') {
       ctx.font = 'bold 28px monospace';
-      this.textWithShadow(ctx, `Round ${roundNum} — Finished!`, ARENA_WIDTH / 2, 38, '#feca57');
+      this.textWithShadow(ctx, `Game over`, ARENA_WIDTH / 2, 38, '#feca57');
     }
   }
 

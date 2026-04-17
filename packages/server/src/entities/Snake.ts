@@ -7,6 +7,11 @@ import {
   SNAKE_SEGMENT_SPACING,
   SNAKE_INITIAL_LENGTH,
   REVEAL_BRUSH_RADIUS,
+  TURBO_MULTIPLIER,
+  TURBO_MAX_MS,
+  TURBO_COOLDOWN_MS,
+  BRAKE_DURATION_MS,
+  BRAKE_COOLDOWN_MS,
   headingToVector,
   distance,
 } from '@snakegame/shared';
@@ -49,7 +54,28 @@ export class Snake {
   baseRevealRadius: number;
   effectDrain: Record<string, number> = {};
   turnDirection: -1 | 0 | 1 = 0;
+  /** Client-driven turn rate scale (e.g. MIDI jog speed). 1 = full turnRate. */
+  turnIntensity = 1;
   boosting = false;
+
+  // ---- Turbo / brake pads (DDJ hot-cues etc.) ----
+  /** Live state of the player's turbo pad. Client emits edges via
+   *  `input:turbo`. The `updateTurboBrake` tick consumes this. */
+  turboPressed = false;
+  /** Held duration of the current turbo burst (ms). Forced release at
+   *  TURBO_MAX_MS regardless of user input. */
+  turboHeldMs = 0;
+  /** Cooldown remaining (ms) before turbo can be re-engaged. */
+  turboCooldownMs = 0;
+  /** Computed per-tick: true iff the speed multiplier should apply this tick. */
+  turboActive = false;
+
+  brakePressed = false;
+  /** While brake is engaged, counts down from BRAKE_DURATION_MS → 0. */
+  brakeRemainingMs = 0;
+  brakeCooldownMs = 0;
+  /** Computed per-tick: true iff speed should be zero this tick. */
+  brakeActive = false;
 
   // Path history: dense trail of head positions
   private path: Vector2D[] = [];
@@ -111,15 +137,66 @@ export class Snake {
     this.rebuildSegments();
   }
 
+  /** Advance the turbo/brake state machines. Call once per server tick,
+   *  before `update()` — the computed `turboActive` / `brakeActive` flags
+   *  feed into `update()`'s movement distance calculation. */
+  updateTurboBrake(dtMs: number): void {
+    // --- Brake ---
+    if (this.brakeActive) {
+      this.brakeRemainingMs -= dtMs;
+      if (this.brakeRemainingMs <= 0) {
+        this.brakeActive = false;
+        this.brakeRemainingMs = 0;
+        this.brakeCooldownMs = BRAKE_COOLDOWN_MS;
+      }
+    } else if (this.brakeCooldownMs > 0) {
+      this.brakeCooldownMs = Math.max(0, this.brakeCooldownMs - dtMs);
+    } else if (this.brakePressed) {
+      this.brakeActive = true;
+      this.brakeRemainingMs = BRAKE_DURATION_MS;
+    }
+
+    // --- Turbo ---
+    if (this.turboCooldownMs > 0) {
+      this.turboCooldownMs = Math.max(0, this.turboCooldownMs - dtMs);
+      this.turboActive = false;
+    } else if (this.turboPressed) {
+      this.turboActive = true;
+      this.turboHeldMs += dtMs;
+      if (this.turboHeldMs >= TURBO_MAX_MS) {
+        this.turboActive = false;
+        this.turboCooldownMs = TURBO_COOLDOWN_MS;
+        this.turboHeldMs = 0;
+      }
+    } else {
+      if (this.turboHeldMs > 0) {
+        // Released before max — small cooldown to discourage mashing.
+        this.turboCooldownMs = TURBO_COOLDOWN_MS;
+        this.turboHeldMs = 0;
+      }
+      this.turboActive = false;
+    }
+  }
+
+  /** Effective forward speed for this tick, with turbo/brake applied on top
+   *  of whatever powerups have set `snake.speed` to. */
+  getEffectiveSpeed(): number {
+    if (this.brakeActive) return 0;
+    if (this.turboActive) return this.speed * TURBO_MULTIPLIER;
+    return this.speed;
+  }
+
   update(dt: number): void {
     if (!this.alive) return;
 
-    // Turn
-    this.angle += this.turnDirection * this.turnRate * dt;
+    // Turn (turnIntensity from MIDI jog speed etc.; 1 when absent). Turning
+    // is intentionally still allowed while braked — players can aim during
+    // the stop window.
+    this.angle += this.turnDirection * this.turnRate * this.turnIntensity * dt;
 
     // Move head forward
     const dir = headingToVector(this.angle);
-    const moveDistance = this.speed * dt;
+    const moveDistance = this.getEffectiveSpeed() * dt;
     const head = this.path[0];
     const newHead: Vector2D = {
       x: head.x + dir.x * moveDistance,
@@ -215,6 +292,18 @@ export class Snake {
 
   kill(): void {
     this.alive = false;
+    this.resetTurboBrake();
+  }
+
+  private resetTurboBrake(): void {
+    this.turboPressed = false;
+    this.turboActive = false;
+    this.turboHeldMs = 0;
+    this.turboCooldownMs = 0;
+    this.brakePressed = false;
+    this.brakeActive = false;
+    this.brakeRemainingMs = 0;
+    this.brakeCooldownMs = 0;
   }
 
   resetForRound(): void {
@@ -234,13 +323,18 @@ export class Snake {
     this.crippled = false;
     this.itemSlot = null;
     this.activeEffect = null;
+    this.turnDirection = 0;
+    this.turnIntensity = 1;
+    this.resetTurboBrake();
   }
 
   respawn(pos: Vector2D, angle: number): void {
     this.angle = angle;
     this.alive = true;
     this.turnDirection = 0;
+    this.turnIntensity = 1;
     this.boosting = false;
+    this.resetTurboBrake();
     // Preserve passive stacks across death — respawn with the current
     // baseline rather than stock values.
     this.speed = this.baseSpeed;

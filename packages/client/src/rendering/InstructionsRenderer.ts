@@ -37,7 +37,7 @@ export class InstructionsRenderer {
     this.drawSection(ctx, leftX, topY, colW, 'GOAL', [
       'Reveal hidden symbols on the board.',
       'Each symbol appears on TWO tiles.',
-      'Capture 90% of a tile to claim it.',
+      'Capture 80% of a tile to claim it.',
       'Capture both tiles of a pair with the',
       '  SAME snake → you match the pair.',
       'Most matched pairs when the round',
@@ -90,13 +90,11 @@ export class InstructionsRenderer {
     x: number, y: number, w: number,
     title: string, lines: string[],
   ): void {
-    // Section box
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    ctx.strokeStyle = 'rgba(68,170,255,0.3)';
+    // Section box (outline only)
+    ctx.strokeStyle = '#5a8ec4';
     ctx.lineWidth = 2;
     const h = 50 + lines.length * 32 + 20;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeRect(x, y, w, h);
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 
     // Title
     ctx.textAlign = 'left';
@@ -107,7 +105,7 @@ export class InstructionsRenderer {
 
     // Lines
     ctx.font = '20px monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillStyle = '#dce4f0';
     lines.forEach((line, i) => {
       ctx.fillText(line, x + 24, y + 60 + i * 32);
     });

@@ -132,6 +132,8 @@ export interface MemoryPair {
   symbolName: string;
   tileIds: [number, number];
   matched: boolean;            // true when both tiles captured by same snake
+  /** Both tiles captured but by different snakes — pair cannot be matched. */
+  neutralized: boolean;
   matchedBy: string | null;    // snakeId that matched the pair
   isBonus: boolean;            // one pair per round grants an OP powerup when matched
 }

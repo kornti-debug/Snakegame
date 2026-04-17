@@ -29,7 +29,7 @@ export class GameLayer {
     ctx.clearRect(0, 0, width, height);
 
     // Border
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.strokeStyle = '#4a5568';
     ctx.lineWidth = 4;
     ctx.strokeRect(2, 2, width - 4, height - 4);
 

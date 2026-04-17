@@ -601,7 +601,7 @@ function arenaFrame(): void {
   if (!playing) {
     arenaMsg.textContent = lastSnapshot.round.phase === 'waiting'
       ? `round starting in ${Math.ceil(lastSnapshot.round.timeRemainingMs / 1000)}…`
-      : 'round ended';
+      : 'round over';
   }
 }
 requestAnimationFrame(arenaFrame);

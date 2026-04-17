@@ -42,11 +42,13 @@ export class BackgroundLayer {
         const x = tile.x + (tile.width - w) / 2;
         const y = tile.y + (tile.height - h) / 2;
 
-        // Clip to tile bounds
+        // Clip to tile bounds; light backing so symbols read through reveal holes.
         this.ctx.save();
         this.ctx.beginPath();
         this.ctx.roundRect(tile.x, tile.y, tile.width, tile.height, 12);
         this.ctx.clip();
+        this.ctx.fillStyle = '#e8edf5';
+        this.ctx.fillRect(tile.x, tile.y, tile.width, tile.height);
         this.ctx.drawImage(img, x, y, w, h);
         this.ctx.restore();
 
@@ -55,11 +57,11 @@ export class BackgroundLayer {
       img.onerror = () => {
         // Draw fallback colored rectangle with symbol name
         this.ctx.save();
-        this.ctx.fillStyle = '#1a1a2e';
+        this.ctx.fillStyle = '#e8edf5';
         this.ctx.beginPath();
         this.ctx.roundRect(tile.x, tile.y, tile.width, tile.height, 12);
         this.ctx.fill();
-        this.ctx.fillStyle = '#666';
+        this.ctx.fillStyle = '#1a2433';
         this.ctx.font = 'bold 24px sans-serif';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
@@ -97,7 +99,7 @@ export class BackgroundLayer {
     ctx.fillStyle = '#0a0a1a';
     ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillStyle = '#8899aa';
     ctx.font = 'bold 80px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

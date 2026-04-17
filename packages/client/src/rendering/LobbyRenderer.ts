@@ -19,9 +19,7 @@ const SECTION_TOP = 170;
 const LIST_ROW_H = 46;
 const LIST_ROW_GAP = 4;
 
-const CARD_BG = 'rgba(10, 12, 28, 0.72)';
-const CARD_STROKE_STRONG = '#44aaff';
-const CARD_STROKE = 'rgba(68, 170, 255, 0.4)';
+const CARD_STROKE_STRONG = '#5cb3ff';
 
 // --- Click dispatch types ---
 export type LobbyAction =
@@ -60,7 +58,7 @@ export class LobbyRenderer {
     return null;
   }
 
-  render(players: LobbyPlayer[], boardPreset: BoardPreset = 'medium'): void {
+  render(players: LobbyPlayer[], boardPreset: BoardPreset = 'medium', ddjDuelMode = false): void {
     const ctx = this.ctx;
     this.pulseTime += 0.03;
     this.hitZones = [];
@@ -69,7 +67,6 @@ export class LobbyRenderer {
     ctx.fillStyle = '#0a0a1a';
     ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
-    this.drawAnimatedGrid(ctx);
     this.boids.render(ctx);
 
     // Centered title
@@ -88,8 +85,13 @@ export class LobbyRenderer {
     ctx.restore();
 
     ctx.font = '20px monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillStyle = '#b8c4d4';
     ctx.fillText('Snake Memory  ·  scan QR to join, pick a board', ARENA_WIDTH / 2, 130);
+    if (ddjDuelMode) {
+      ctx.font = '17px monospace';
+      ctx.fillStyle = '#ffcc88';
+      ctx.fillText('DDJ 1v1: spin LEFT deck to join slot 1, RIGHT deck for slot 2  ·  phones can still join', ARENA_WIDTH / 2, 158);
+    }
 
     // Left: player list
     this.drawPlayerList(ctx, LIST_X, SECTION_TOP, LIST_W, players);
@@ -104,7 +106,7 @@ export class LobbyRenderer {
     this.drawStartButton(ctx, allReady, players.length);
 
     ctx.font = '13px monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillStyle = '#6a7588';
     ctx.textAlign = 'center';
     ctx.fillText('ESC returns to main menu  ·  double-click for fullscreen', ARENA_WIDTH / 2, ARENA_HEIGHT - 24);
   }
@@ -127,11 +129,11 @@ export class LobbyRenderer {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.font = 'bold 22px monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillStyle = '#e8eef8';
     ctx.fillText('PLAYERS', x + pad, y + pad + 20);
 
     ctx.font = '18px monospace';
-    ctx.fillStyle = 'rgba(136, 221, 255, 0.7)';
+    ctx.fillStyle = '#9dd4ff';
     ctx.textAlign = 'right';
     ctx.fillText(`${players.length} / ${MAX_PLAYERS}`, x + w - pad, y + pad + 20);
 
@@ -159,11 +161,9 @@ export class LobbyRenderer {
     x: number, y: number, w: number, h: number,
     player: LobbyPlayer,
   ): void {
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
     ctx.strokeStyle = player.color;
     ctx.lineWidth = 2;
     this.roundRect(ctx, x, y, w, h, 6);
-    ctx.fill();
     ctx.stroke();
 
     const pad = 12;
@@ -174,7 +174,7 @@ export class LobbyRenderer {
 
     // Slot #
     ctx.font = 'bold 16px monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = '#aab8cc';
     ctx.fillText(`${player.index + 1}`, x + pad, cy);
 
     // Snake head
@@ -217,15 +217,15 @@ export class LobbyRenderer {
 
     // Kind badge (between name area and kick button)
     const badgeText = player.kind === 'phone' ? 'PHONE' : 'KEYBOARD';
-    const badgeBg = player.kind === 'phone' ? 'rgba(136, 221, 255, 0.18)' : 'rgba(136, 255, 136, 0.18)';
     const badgeFg = player.kind === 'phone' ? '#88ddff' : '#88ff88';
     ctx.font = 'bold 12px monospace';
     const badgeW = ctx.measureText(badgeText).width + 14;
     const badgeH = 22;
     const badgeX = kickX - 14 - badgeW;
-    ctx.fillStyle = badgeBg;
+    ctx.strokeStyle = badgeFg;
+    ctx.lineWidth = 1.5;
     this.roundRect(ctx, badgeX, cy - badgeH / 2, badgeW, badgeH, 4);
-    ctx.fill();
+    ctx.stroke();
     ctx.fillStyle = badgeFg;
     ctx.textAlign = 'center';
     ctx.fillText(badgeText, badgeX + badgeW / 2, cy);
@@ -241,11 +241,9 @@ export class LobbyRenderer {
 
   private drawKickButton(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
     ctx.save();
-    ctx.fillStyle = 'rgba(255, 68, 68, 0.14)';
-    ctx.strokeStyle = 'rgba(255, 120, 120, 0.55)';
+    ctx.strokeStyle = '#ff8888';
     ctx.lineWidth = 1.5;
     this.roundRect(ctx, x, y, size, size, 6);
-    ctx.fill();
     ctx.stroke();
 
     // X mark
@@ -267,7 +265,7 @@ export class LobbyRenderer {
     x: number, y: number, w: number, h: number,
     index: number, isNext: boolean,
   ): void {
-    ctx.strokeStyle = isNext ? 'rgba(68, 170, 255, 0.45)' : 'rgba(255,255,255,0.08)';
+    ctx.strokeStyle = isNext ? '#6ab4e8' : '#3d4a5c';
     ctx.lineWidth = 1;
     ctx.setLineDash([6, 4]);
     this.roundRect(ctx, x, y, w, h, 6);
@@ -280,17 +278,17 @@ export class LobbyRenderer {
     ctx.textBaseline = 'middle';
 
     ctx.font = 'bold 16px monospace';
-    ctx.fillStyle = isNext ? 'rgba(136, 221, 255, 0.6)' : 'rgba(255,255,255,0.2)';
+    ctx.fillStyle = isNext ? '#9dd4ff' : '#6a7588';
     ctx.fillText(`${index + 1}`, x + pad, cy);
 
     if (isNext) {
       const pulse = 0.45 + Math.sin(this.pulseTime * 3) * 0.25;
       ctx.font = '16px monospace';
-      ctx.fillStyle = `rgba(136, 221, 255, ${pulse})`;
+      ctx.fillStyle = `rgb(${Math.round(100 + 155 * pulse)}, ${Math.round(200 + 55 * pulse)}, 255)`;
       ctx.fillText('+  empty — scan the QR code to join', x + pad + 40, cy);
     } else {
       ctx.font = '14px monospace';
-      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillStyle = '#6a7588';
       ctx.fillText('— empty —', x + pad + 40, cy);
     }
   }
@@ -313,7 +311,7 @@ export class LobbyRenderer {
     ctx.fillText('SCAN TO JOIN', x + w / 2, y + pad + 22);
 
     ctx.font = '13px monospace';
-    ctx.fillStyle = 'rgba(136, 221, 255, 0.7)';
+    ctx.fillStyle = '#9dd4ff';
     ctx.fillText('point your phone camera at the code', x + w / 2, y + pad + 42);
 
     const qrCanvas = this.qr?.getCanvas();
@@ -321,11 +319,9 @@ export class LobbyRenderer {
     const qrX = x + (w - qrSize) / 2;
     const qrY = y + pad + headerH + 18;
 
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = CARD_STROKE;
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     this.roundRect(ctx, qrX - 6, qrY - 6, qrSize + 12, qrSize + 12, 8);
-    ctx.fill();
     ctx.stroke();
 
     if (qrCanvas) {
@@ -339,7 +335,7 @@ export class LobbyRenderer {
     }
 
     ctx.font = '11px monospace';
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.fillStyle = '#9aa8b8';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(this.qr?.url.replace(/^https?:\/\//, '') ?? '', x + w / 2, y + h - 14);
@@ -362,7 +358,7 @@ export class LobbyRenderer {
     ctx.fillText('BOARD SIZE', x + w / 2, y + pad + 22);
 
     ctx.font = '13px monospace';
-    ctx.fillStyle = 'rgba(136, 221, 255, 0.7)';
+    ctx.fillStyle = '#9dd4ff';
     ctx.fillText('click a card to choose', x + w / 2, y + pad + 42);
 
     const gridX = x + pad;
@@ -391,19 +387,16 @@ export class LobbyRenderer {
     const cfg = BOARD_PRESETS[preset];
 
     ctx.save();
-    ctx.fillStyle = selected ? 'rgba(68, 255, 68, 0.10)' : 'rgba(255,255,255,0.04)';
-    ctx.strokeStyle = selected ? '#44ff44' : 'rgba(255,255,255,0.15)';
-    ctx.lineWidth = selected ? 2.5 : 1;
-    if (selected) { ctx.shadowColor = '#44ff44'; ctx.shadowBlur = 10; }
+    ctx.strokeStyle = selected ? '#44ff44' : '#5a6a7d';
+    ctx.lineWidth = selected ? 2.5 : 1.5;
     this.roundRect(ctx, x, y, w, h, 6);
-    ctx.fill();
     ctx.stroke();
     ctx.restore();
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.font = 'bold 15px monospace';
-    ctx.fillStyle = selected ? '#fff' : 'rgba(255,255,255,0.75)';
+    ctx.fillStyle = selected ? '#fff' : '#c8d4e4';
     ctx.fillText(preset.toUpperCase(), x + w / 2, y + 10);
 
     const prevX = x + 8;
@@ -415,7 +408,7 @@ export class LobbyRenderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     ctx.font = 'bold 12px monospace';
-    ctx.fillStyle = selected ? '#ccffcc' : 'rgba(255,255,255,0.5)';
+    ctx.fillStyle = selected ? '#ccffcc' : '#9aa8b8';
     ctx.fillText(`${cfg.cols}×${cfg.rows} · ${cfg.pairCount} pairs`, x + w / 2, y + h - 6);
   }
 
@@ -432,10 +425,14 @@ export class LobbyRenderer {
     const inner = cellSize * 0.8;
     const pad = (cellSize - inner) / 2;
 
-    ctx.fillStyle = highlight ? 'rgba(136, 255, 136, 0.6)' : 'rgba(136, 180, 220, 0.35)';
+    const strokeCol = highlight ? '#88ff99' : '#7a9eb8';
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = 1;
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        ctx.fillRect(ox + col * cellSize + pad, oy + row * cellSize + pad, inner, inner);
+        const rx = ox + col * cellSize + pad;
+        const ry = oy + row * cellSize + pad;
+        ctx.strokeRect(rx + 0.5, ry + 0.5, inner - 1, inner - 1);
       }
     }
   }
@@ -450,24 +447,19 @@ export class LobbyRenderer {
     const pulse = 0.85 + Math.sin(this.pulseTime * 4) * 0.15;
     ctx.save();
     if (enabled) {
-      ctx.fillStyle = `rgba(68, 255, 68, ${0.14 * pulse})`;
-      ctx.strokeStyle = `rgba(68, 255, 68, ${pulse})`;
-      ctx.shadowColor = '#44ff44';
-      ctx.shadowBlur = 14;
+      ctx.strokeStyle = `rgb(${Math.round(40 + 120 * pulse)}, ${Math.round(200 + 55 * pulse)}, ${Math.round(40 + 120 * pulse)})`;
     } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.04)';
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.strokeStyle = '#5a6a7d';
     }
     ctx.lineWidth = 2.5;
     this.roundRect(ctx, x, y, w, h, 12);
-    ctx.fill();
     ctx.stroke();
     ctx.restore();
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 28px monospace';
-    ctx.fillStyle = enabled ? '#aaffaa' : 'rgba(255,255,255,0.35)';
+    ctx.fillStyle = enabled ? '#aaffaa' : '#7a8799';
 
     let label: string;
     if (playerCount === 0) label = 'WAITING FOR PLAYERS…';
@@ -477,7 +469,7 @@ export class LobbyRenderer {
 
     if (enabled) {
       ctx.font = '12px monospace';
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillStyle = '#9aa8b8';
       ctx.fillText('(click or press Enter)', x + w / 2, y + h + 14);
       this.hitZones.push({ x, y, w, h, action: { type: 'start' } });
     }
@@ -490,29 +482,11 @@ export class LobbyRenderer {
     x: number, y: number, w: number, h: number,
   ): void {
     ctx.save();
-    ctx.fillStyle = CARD_BG;
     ctx.strokeStyle = CARD_STROKE_STRONG;
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = 'rgba(68, 170, 255, 0.2)';
-    ctx.shadowBlur = 16;
+    ctx.lineWidth = 2;
     this.roundRect(ctx, x, y, w, h, 12);
-    ctx.fill();
-    ctx.shadowBlur = 0;
     ctx.stroke();
     ctx.restore();
-  }
-
-  private drawAnimatedGrid(ctx: CanvasRenderingContext2D): void {
-    ctx.strokeStyle = 'rgba(68, 170, 255, 0.04)';
-    ctx.lineWidth = 1;
-    const step = 40;
-    const offset = (this.pulseTime * 10) % step;
-    for (let x = -step + offset; x <= ARENA_WIDTH + step; x += step) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ARENA_HEIGHT); ctx.stroke();
-    }
-    for (let y = -step + offset; y <= ARENA_HEIGHT + step; y += step) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ARENA_WIDTH, y); ctx.stroke();
-    }
   }
 
   private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

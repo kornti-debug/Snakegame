@@ -129,6 +129,7 @@ export class MemoryBoardSystem {
         symbolName: symbol.name,
         tileIds: [tileA, tileB],
         matched: false,
+        neutralized: false,
         matchedBy: null,
         isBonus: false,
       });
@@ -244,15 +245,17 @@ export class MemoryBoardSystem {
 
   private checkPairMatch(pairId: number, snakes: Snake[]): void {
     const pair = this.pairs[pairId];
-    if (pair.matched) return;
+    if (pair.matched || pair.neutralized) return;
 
     const tileA = this.tiles[pair.tileIds[0]];
     const tileB = this.tiles[pair.tileIds[1]];
 
     if (!tileA.capturedBy || !tileB.capturedBy) return;
 
-    // Both tiles must be captured by the SAME snake for a match
-    if (tileA.capturedBy !== tileB.capturedBy) return;
+    if (tileA.capturedBy !== tileB.capturedBy) {
+      pair.neutralized = true;
+      return;
+    }
 
     pair.matched = true;
     pair.matchedBy = tileA.capturedBy;
@@ -286,7 +289,7 @@ export class MemoryBoardSystem {
 
   activateHint(symbolName: string): boolean {
     const pair = this.pairs.find(p => p.symbolName.toLowerCase() === symbolName.toLowerCase());
-    if (!pair || pair.matched) return false;
+    if (!pair || pair.matched || pair.neutralized) return false;
 
     // Don't duplicate active hints for the same pair
     if (this.hints.some(h => h.pairId === pair.pairId)) return false;
@@ -301,7 +304,33 @@ export class MemoryBoardSystem {
   }
 
   isRoundComplete(): boolean {
-    return this.pairs.length > 0 && this.pairs.every(p => p.matched);
+    return this.pairs.length > 0 && this.pairs.every(p => p.matched || p.neutralized);
+  }
+
+  /**
+   * Unmatched pairs that could still award a point to someone (not split-captured).
+   */
+  countRemainingPairSlots(): number {
+    return this.pairs.filter(p => !p.matched && !p.neutralized).length;
+  }
+
+  /**
+   * If one snake's pair score exceeds every other's best possible final score
+   * (current score + all remaining pair slots), that snake has won outright.
+   */
+  getDecisiveWinnerSnakeId(snakes: Snake[]): string | null {
+    if (snakes.length < 2) return null;
+    const remaining = this.countRemainingPairSlots();
+    const scores = this.getPairScores();
+    const sorted = [...snakes].sort(
+      (a, b) => (scores[b.id] ?? 0) - (scores[a.id] ?? 0),
+    );
+    const top = sorted[0];
+    const second = sorted[1];
+    const topScore = scores[top.id] ?? 0;
+    const secondScore = scores[second.id] ?? 0;
+    if (topScore > secondScore + remaining) return top.id;
+    return null;
   }
 
   flushEvents(): MemoryBoardEvent[] {
@@ -336,7 +365,7 @@ export class MemoryBoardSystem {
 
   /** Get all unmatched symbol names (for guessing) */
   getGuessableSymbols(): string[] {
-    return this.pairs.filter(p => !p.matched).map(p => p.symbolName);
+    return this.pairs.filter(p => !p.matched && !p.neutralized).map(p => p.symbolName);
   }
 
   getTiles(): MemoryTile[] {

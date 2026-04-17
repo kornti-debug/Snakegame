@@ -1,5 +1,5 @@
 import type { RoundPhase, RoundState } from '@snakegame/shared';
-import { ROUND_DURATION_MEMORY, ROUND_WAIT_TIME, ROUND_END_DISPLAY_TIME } from '@snakegame/shared';
+import { ROUND_WAIT_TIME, ROUND_END_DISPLAY_TIME } from '@snakegame/shared';
 
 export class RoundManager {
   phase: RoundPhase = 'waiting';
@@ -13,32 +13,35 @@ export class RoundManager {
     const dtMs = dt * 1000;
     this.phaseJustChanged = false;
 
-    this.timeRemainingMs -= dtMs;
-
-    if (this.timeRemainingMs <= 0) {
-      switch (this.phase) {
-        case 'waiting':
-          this.startRound();
-          return 'playing';
-        case 'playing':
-          this.endRound();
-          return 'ended';
-        case 'ended':
-          this.phase = 'waiting';
-          this.timeRemainingMs = ROUND_WAIT_TIME;
-          this.roundNumber++;
-          this.phaseJustChanged = true;
-          return 'waiting';
+    if (this.phase === 'waiting') {
+      this.timeRemainingMs -= dtMs;
+      if (this.timeRemainingMs <= 0) {
+        this.startRound();
+        return 'playing';
       }
+      return null;
     }
 
-    return null; // no phase change
+    if (this.phase === 'ended') {
+      this.timeRemainingMs -= dtMs;
+      if (this.timeRemainingMs <= 0) {
+        this.phase = 'waiting';
+        this.timeRemainingMs = ROUND_WAIT_TIME;
+        this.roundNumber++;
+        this.phaseJustChanged = true;
+        return 'waiting';
+      }
+      return null;
+    }
+
+    // playing — no wall clock; GameRoom ends via pairs / decisive lead
+    return null;
   }
 
   startRound(): void {
     // roundNumber is already set when we entered 'waiting' — don't bump again.
     this.phase = 'playing';
-    this.timeRemainingMs = ROUND_DURATION_MEMORY;
+    this.timeRemainingMs = 0;
     this.phaseJustChanged = true;
   }
 

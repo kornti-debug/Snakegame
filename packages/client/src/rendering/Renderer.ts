@@ -5,6 +5,7 @@ import { RevealLayer } from './layers/RevealLayer.js';
 import { TileOverlayLayer } from './layers/TileOverlayLayer.js';
 import { GameLayer } from './layers/GameLayer.js';
 import { UILayer } from './layers/UILayer.js';
+import { ScreenShake } from './ScreenShake.js';
 
 export class Renderer {
   private canvas: HTMLCanvasElement;
@@ -15,6 +16,8 @@ export class Renderer {
   private tileOverlayLayer: TileOverlayLayer;
   private gameLayer: GameLayer;
   private uiLayer: UILayer;
+
+  readonly shake = new ScreenShake();
 
   constructor(container: HTMLElement, canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -55,6 +58,17 @@ export class Renderer {
     // Clear main canvas
     ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
+    // Apply screen shake to all layers (UI included so the whole composition
+    // jolts together — feels chunkier than shaking only the gameplay layer).
+    const s = this.shake.update(performance.now());
+    const shaking = s.x !== 0 || s.y !== 0 || s.rot !== 0;
+    if (shaking) {
+      ctx.save();
+      ctx.translate(ARENA_WIDTH / 2 + s.x, ARENA_HEIGHT / 2 + s.y);
+      ctx.rotate(s.rot);
+      ctx.translate(-ARENA_WIDTH / 2, -ARENA_HEIGHT / 2);
+    }
+
     // Layer 1: Background (tile images)
     ctx.drawImage(this.backgroundLayer.canvas, 0, 0);
 
@@ -80,5 +94,7 @@ export class Renderer {
     // Layer 5: UI (HUD, scores)
     this.uiLayer.render(snapshot);
     ctx.drawImage(this.uiLayer.canvas, 0, 0);
+
+    if (shaking) ctx.restore();
   }
 }

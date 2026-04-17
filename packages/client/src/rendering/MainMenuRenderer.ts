@@ -1,10 +1,11 @@
 import { ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
 import { BackgroundBoids } from './BackgroundBoids.js';
 
-export type MenuEntry = 'play' | 'instructions';
+export type MenuEntry = 'play' | 'ddj-duel' | 'instructions';
 
 const ENTRIES: { id: MenuEntry; label: string }[] = [
   { id: 'play', label: 'PLAY' },
+  { id: 'ddj-duel', label: 'DDJ 1v1' },
   { id: 'instructions', label: 'INSTRUCTIONS' },
 ];
 
@@ -35,8 +36,6 @@ export class MainMenuRenderer {
     ctx.fillStyle = '#0a0a1a';
     ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
-    this.drawAnimatedGrid(ctx);
-
     // Ambient flocking boids behind everything
     this.boids.render(ctx);
 
@@ -60,8 +59,8 @@ export class MainMenuRenderer {
     ctx.fillText('Reveal, capture, match the pairs', ARENA_WIDTH / 2, 340);
 
     // Menu entries
-    const startY = 520;
-    const spacing = 90;
+    const startY = 480;
+    const spacing = 82;
     ENTRIES.forEach((entry, i) => {
       const y = startY + i * spacing;
       const isSel = i === this.selection;
@@ -83,16 +82,4 @@ export class MainMenuRenderer {
     ctx.fillText('↑ / ↓  select   ·   ENTER  confirm   ·   double-click  fullscreen', ARENA_WIDTH / 2, ARENA_HEIGHT - 60);
   }
 
-  private drawAnimatedGrid(ctx: CanvasRenderingContext2D): void {
-    ctx.strokeStyle = 'rgba(68, 170, 255, 0.04)';
-    ctx.lineWidth = 1;
-    const step = 40;
-    const offset = (this.pulseTime * 10) % step;
-    for (let x = -step + offset; x <= ARENA_WIDTH + step; x += step) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ARENA_HEIGHT); ctx.stroke();
-    }
-    for (let y = -step + offset; y <= ARENA_HEIGHT + step; y += step) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ARENA_WIDTH, y); ctx.stroke();
-    }
-  }
 }

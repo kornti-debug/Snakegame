@@ -123,6 +123,7 @@ export class GameRoom {
     if (playerMap) {
       for (const snake of playerMap.values()) {
         snake.turnDirection = 0;
+        snake.turnIntensity = 1;
         snake.boosting = false;
         snake.isDisconnected = true;
       }
@@ -353,7 +354,12 @@ export class GameRoom {
     this.memoryBoardSystem.setConfig(BOARD_PRESETS[this.boardPreset]);
     this.memoryBoardSystem.reset();
     this.obstacles = [];
-    // Keep lobby players as-is
+    // Drop local (host-keyboard/midi/gamepad) lobby entries — they will
+    // re-register when the host re-enters the lobby and uses an input
+    // device. Phones stay so players don't have to rejoin between games.
+    for (const [k, p] of [...this.lobbyPlayers]) {
+      if (p.kind !== 'phone') this.lobbyPlayers.delete(k);
+    }
     for (const p of this.lobbyPlayers.values()) {
       p.ready = false;
     }
@@ -402,28 +408,44 @@ export class GameRoom {
     // Round state machine
     const phaseChange = this.roundManager.update(dt);
 
-    // Subsequent rounds: setup board at the start of 'waiting' so the
-    // pre-reveal can show it. The first round was set up in startGame().
+    // Single-round mode: when the post-round 'ended' window expires
+    // (RoundManager rolls over to 'waiting' for what would be the next
+    // round), end the game instead of starting another round. Clients
+    // see gamePhase flip to 'lobby' and snap back to the main menu.
     if (phaseChange === 'waiting') {
-      this.beginRoundSetup(snakes);
+      this.returnToLobby();
+      return;
     }
 
     if (phaseChange === 'ended') {
       const pairScores = this.memoryBoardSystem.getPairScores();
+      const revealScores = this.revealSystem.getRevealScores();
       let winner: { id: string; name: string; score: number } | null = null;
-      let maxScore = 0;
+      let maxScore = -1;
+      const tiedAtTop: Snake[] = [];
       for (const snake of snakes) {
         const score = pairScores[snake.id] ?? 0;
         if (score > maxScore) {
           maxScore = score;
-          winner = { id: snake.id, name: snake.name, score };
+          tiedAtTop.length = 0;
+          tiedAtTop.push(snake);
+        } else if (score === maxScore) {
+          tiedAtTop.push(snake);
         }
+      }
+      if (tiedAtTop.length === 1) {
+        winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
+      } else if (tiedAtTop.length > 1) {
+        tiedAtTop.sort(
+          (a, b) => (revealScores[b.id] ?? 0) - (revealScores[a.id] ?? 0),
+        );
+        winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
       }
       this.pendingEvents.push({
         type: 'round-end',
         roundNumber: this.roundManager.roundNumber,
         winner,
-        scores: this.revealSystem.getRevealScores(),
+        scores: revealScores,
         pairScores,
       });
     }
@@ -442,6 +464,12 @@ export class GameRoom {
           this.respawnTimers.set(snakeId, remaining);
         }
       }
+
+      // Tick the turbo/brake state machines for every snake BEFORE we
+      // compute movement. `Snake.update` calls `getEffectiveSpeed()` which
+      // reads the flags we set here.
+      const tickDtMs = dt * 1000;
+      for (const snake of snakes) snake.updateTurboBrake(tickDtMs);
 
       this.movementSystem.update(snakes, dt);
       this.collisionSystem.update(snakes, this.obstacles);
@@ -491,8 +519,10 @@ export class GameRoom {
         }
       }
 
-      // Check if all pairs matched → end round early
-      if (this.memoryBoardSystem.isRoundComplete()) {
+      // Decisive pair lead (cannot be caught) or board fully resolved
+      if (this.memoryBoardSystem.getDecisiveWinnerSnakeId(snakes)) {
+        this.roundManager.forceEndRound();
+      } else if (this.memoryBoardSystem.isRoundComplete()) {
         this.roundManager.forceEndRound();
       }
 

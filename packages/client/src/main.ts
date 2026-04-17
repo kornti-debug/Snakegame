@@ -5,18 +5,20 @@ import { LobbyRenderer, type LobbyAction } from './rendering/LobbyRenderer.js';
 import { MainMenuRenderer } from './rendering/MainMenuRenderer.js';
 import { InstructionsRenderer } from './rendering/InstructionsRenderer.js';
 import { ConfirmDialogRenderer } from './rendering/ConfirmDialogRenderer.js';
+import { GameOverRenderer, type GameOverAction } from './rendering/GameOverRenderer.js';
 import { BackgroundBoids } from './rendering/BackgroundBoids.js';
 import { QrCache } from './rendering/QrCache.js';
 import { KeyboardProvider } from './input/KeyboardProvider.js';
 import { GamepadProvider } from './input/GamepadProvider.js';
 import { MidiProvider } from './input/MidiProvider.js';
+import { MidiHub } from './input/midi/MidiHub.js';
+import { MidiDeckProvider } from './input/midi/MidiDeckProvider.js';
+import { loadDdjMidiConfig, type ResolvedDdjMidiConfig } from './input/midi/loadDdjMidiConfig.js';
 import type { InputProvider } from './input/InputProvider.js';
 import type { GameSnapshot, BoardPreset } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, DEFAULT_BOARD_PRESET } from '@snakegame/shared';
-
-// Projector / host client. Local input devices (WASD, arrow keys,
-// gamepad) self-register as lobby slots the moment they're used — no
-// auto-join, no "ready" step. Phones keep using their own QR flow.
+import { sfx } from './audio/SfxEngine.js';
+import { diffSnapshots, type SnapshotEvent } from './audio/SnapshotEvents.js';
 
 const container = document.getElementById('game')!;
 
@@ -38,21 +40,51 @@ const lobbyRenderer = new LobbyRenderer(mainCanvas, bgBoids, qrCache);
 const mainMenuRenderer = new MainMenuRenderer(mainCanvas, bgBoids);
 const instructionsRenderer = new InstructionsRenderer(mainCanvas);
 const confirmRenderer = new ConfirmDialogRenderer(mainCanvas);
+const gameOverRenderer = new GameOverRenderer(mainCanvas);
 const buffer = new InterpolationBuffer();
 const socket = createSocket();
 
-type ClientScreen = 'main-menu' | 'instructions' | 'lobby' | 'ingame' | 'exit-confirm';
+type ClientScreen = 'main-menu' | 'instructions' | 'lobby' | 'ingame' | 'exit-confirm' | 'game-over';
 let clientScreen: ClientScreen = 'main-menu';
 let latestSnapshot: GameSnapshot | null = null;
+let prevSnapshotForEvents: GameSnapshot | null = null;
 let boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
 
-// --- Local input slots ---
-// Each entry = one input device that has opted into a lobby slot by
-// being used. Pressing A/D registers 'wasd', arrow keys register
-// 'arrows', and moving/pressing the gamepad registers 'gamepad-0'.
-// Slots are held until the host kicks them from the lobby UI, at which
-// point the same device can re-register by being used again.
-type Binding = 'wasd' | 'arrows' | 'gamepad-0' | 'midi-0';
+/** Winner info captured from the most recent `game:round-end`. Drives the
+ *  game-over screen when the server flips back to the lobby phase. Cleared
+ *  on entering a new game so stale info can't leak between sessions. */
+let lastWinner: { name: string; color: string; score: number } | null = null;
+let gameOverPending = false;
+/** Last in-game snapshot, used as the frozen background behind the
+ *  game-over modal after the server has already flipped back to lobby. */
+let lastIngameSnapshot: GameSnapshot | null = null;
+
+/**
+ * Browser autoplay policy: AudioContext stays suspended until a user gesture.
+ * Resume on any keydown/click/touch that the player makes; once unlocked it
+ * stays unlocked for the session.
+ */
+function unlockAudioOnGesture(): void {
+  const handler = () => {
+    sfx.unlock();
+    window.removeEventListener('keydown', handler);
+    window.removeEventListener('pointerdown', handler);
+    window.removeEventListener('touchstart', handler);
+  };
+  window.addEventListener('keydown', handler, { once: true });
+  window.addEventListener('pointerdown', handler, { once: true });
+  window.addEventListener('touchstart', handler, { once: true });
+}
+unlockAudioOnGesture();
+
+type Binding =
+  | 'wasd'
+  | 'arrows'
+  | 'gamepad-0'
+  | 'midi-0'
+  | 'midi-deck1'
+  | 'midi-deck2';
+
 type LocalSlot = {
   binding: Binding;
   name: string;
@@ -60,16 +92,106 @@ type LocalSlot = {
   state: 'idle' | 'pending' | 'registered';
   playerIndex: number | null;
   lastTurn: -1 | 0 | 1;
+  /** Last emitted MIDI turn intensity (0..1); keyboard/gamepad implicit 1. */
+  lastTurnIntensity: number;
   lastActivate: boolean;
+  lastTurbo: boolean;
+  lastBrake: boolean;
 };
-const slots: Record<Binding, LocalSlot> = {
-  'wasd':       makeSlot('wasd',       'Keyboard WASD',   new KeyboardProvider('wasd')),
-  'arrows':     makeSlot('arrows',     'Keyboard Arrows', new KeyboardProvider('arrows')),
-  'gamepad-0':  makeSlot('gamepad-0',  'Gamepad',         new GamepadProvider(0)),
-  'midi-0':     makeSlot('midi-0',     'DDJ-400',         new MidiProvider()),
-};
+
+let midiRuntime: ResolvedDdjMidiConfig;
+let slots: Partial<Record<Binding, LocalSlot>> = {};
+let duelFromMenu = false;
+/** Prevents duplicate player:set-team emits for the same pair of indices. */
+let duelTeamPairKey: string | null = null;
+
+function applyMidiHubRuntime(cfg: ResolvedDdjMidiConfig): void {
+  const hub = MidiHub.shared();
+  hub.setInputNameIncludes(cfg.midiInputNameIncludes);
+  const urlDebug = window.location.search.includes('midi-debug');
+  hub.setDebugMidi(urlDebug || cfg.debugMidi);
+}
+
+function disposeAllSlots(current: Partial<Record<Binding, LocalSlot>>): void {
+  for (const slot of Object.values(current)) {
+    if (slot) slot.provider.destroy();
+  }
+}
+
+function applyMidiLaneMapsToHub(): void {
+  const hub = MidiHub.shared();
+  for (const slot of Object.values(slots)) {
+    if (!slot || !(slot.provider instanceof MidiDeckProvider)) continue;
+    if (slot.binding === 'midi-0' || slot.binding === 'midi-deck1') {
+      hub.setLaneMap(slot.provider.laneId, midiRuntime.deck1);
+    } else if (slot.binding === 'midi-deck2') {
+      hub.setLaneMap(slot.provider.laneId, midiRuntime.deck2);
+    }
+  }
+}
+
 function makeSlot(binding: Binding, name: string, provider: InputProvider): LocalSlot {
-  return { binding, name, provider, state: 'idle', playerIndex: null, lastTurn: 0, lastActivate: false };
+  return {
+    binding, name, provider,
+    state: 'idle',
+    playerIndex: null,
+    lastTurn: 0,
+    lastTurnIntensity: 1,
+    lastActivate: false,
+    lastTurbo: false,
+    lastBrake: false,
+  };
+}
+
+function buildNormalSlots(): Partial<Record<Binding, LocalSlot>> {
+  return {
+    wasd: makeSlot('wasd', 'Keyboard WASD', new KeyboardProvider('wasd')),
+    arrows: makeSlot('arrows', 'Keyboard Arrows', new KeyboardProvider('arrows')),
+    'gamepad-0': makeSlot('gamepad-0', 'Gamepad', new GamepadProvider(0)),
+    'midi-0': makeSlot('midi-0', 'DDJ-400', new MidiProvider(midiRuntime.deck1)),
+  };
+}
+
+function buildDuelSlots(): Partial<Record<Binding, LocalSlot>> {
+  const hub = MidiHub.shared();
+  const lane1 = hub.addLane(midiRuntime.deck1);
+  const lane2 = hub.addLane(midiRuntime.deck2);
+  return {
+    wasd: makeSlot('wasd', 'Keyboard WASD', new KeyboardProvider('wasd')),
+    arrows: makeSlot('arrows', 'Keyboard Arrows', new KeyboardProvider('arrows')),
+    'gamepad-0': makeSlot('gamepad-0', 'Gamepad', new GamepadProvider(0)),
+    'midi-deck1': makeSlot(
+      'midi-deck1',
+      'DDJ Deck 1 (left)',
+      new MidiDeckProvider(hub, lane1, 'midi-deck1', 'mapped'),
+    ),
+    'midi-deck2': makeSlot(
+      'midi-deck2',
+      'DDJ Deck 2 (right)',
+      new MidiDeckProvider(hub, lane2, 'midi-deck2', 'mapped'),
+    ),
+  };
+}
+
+function enterLobby(fromDuel: boolean): void {
+  disposeAllSlots(slots);
+  duelTeamPairKey = null;
+  duelFromMenu = fromDuel;
+  slots = fromDuel ? buildDuelSlots() : buildNormalSlots();
+  setScreen('lobby');
+}
+
+function tryAssignDuelTeams(): void {
+  if (!duelFromMenu) return;
+  const d1 = slots['midi-deck1'];
+  const d2 = slots['midi-deck2'];
+  if (!d1 || !d2 || d1.state !== 'registered' || d2.state !== 'registered') return;
+  if (d1.playerIndex === null || d2.playerIndex === null) return;
+  const key = `${d1.playerIndex}-${d2.playerIndex}`;
+  if (duelTeamPairKey === key) return;
+  duelTeamPairKey = key;
+  socket.emit('player:set-team', d1.playerIndex, 0);
+  socket.emit('player:set-team', d2.playerIndex, 1);
 }
 
 /** Kick off registration for a binding once its device is used. Guards
@@ -77,8 +199,9 @@ function makeSlot(binding: Binding, name: string, provider: InputProvider): Loca
  *  server is a no-op until the response arrives. */
 function requestRegister(binding: Binding): void {
   const slot = slots[binding];
+  if (!slot) return;
   if (slot.state !== 'idle') return;
-  if (clientScreen !== 'lobby') return; // server rejects mid-game anyway
+  if (clientScreen !== 'lobby') return;
   slot.state = 'pending';
   socket.emit('host:join-local', { name: slot.name, binding });
 }
@@ -86,22 +209,52 @@ function requestRegister(binding: Binding): void {
 function setScreen(next: ClientScreen): void {
   if (next === clientScreen) return;
   if (next === 'main-menu') bgBoids.reset();
-  // Note: we intentionally do NOT call renderer.resetRound() when entering
-  // 'ingame'. The server emits game:round-start whenever a new round begins
-  // (including the very first one in startGame), and the handler below
-  // resets the layers + loads the new tile images there. Calling
-  // resetRound() here races with the async tile-image loads from
-  // round-start and wipes them, leaving the projector black during
-  // pre-reveal.
   clientScreen = next;
+}
+
+function doRestart(): void {
+  lastWinner = null;
+  gameOverPending = false;
+  // Force the server back to the lobby immediately — otherwise it would
+  // auto-return on its own timer 6s after round end, and in the meantime
+  // the ingame-snapshot handler below could yank us back to the ingame
+  // screen. Safe no-op if the server has already returned.
+  socket.emit('lobby:return');
+  enterLobby(duelFromMenu);
+}
+
+function doMainMenuFromGameOver(): void {
+  lastWinner = null;
+  gameOverPending = false;
+  socket.emit('lobby:return');
+  disposeAllSlots(slots);
+  duelFromMenu = false;
+  duelTeamPairKey = null;
+  slots = buildNormalSlots();
+  setScreen('main-menu');
 }
 
 // --- Keyboard (host only: menu nav, start, pause, local-input opt-in) ---
 window.addEventListener('keydown', (e) => {
+  if (clientScreen === 'game-over') {
+    if (e.code === 'Enter' || e.code === 'KeyR') {
+      sfx.menuClick();
+      doRestart();
+    } else if (e.code === 'Escape' || e.code === 'KeyM') {
+      sfx.menuClick();
+      doMainMenuFromGameOver();
+    }
+    return;
+  }
+
   if (clientScreen === 'exit-confirm') {
     if (e.code === 'KeyY') {
       socket.emit('game:set-paused', false);
       socket.emit('lobby:return');
+      disposeAllSlots(slots);
+      duelFromMenu = false;
+      duelTeamPairKey = null;
+      slots = buildNormalSlots();
       setScreen('main-menu');
     } else if (e.code === 'KeyR' || e.code === 'KeyN' || e.code === 'Escape') {
       socket.emit('game:set-paused', false);
@@ -111,11 +264,17 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (clientScreen === 'main-menu') {
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') mainMenuRenderer.move(-1);
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') mainMenuRenderer.move(1);
-    else if (e.code === 'Enter') {
+    if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+      mainMenuRenderer.move(-1);
+      sfx.menuClick();
+    } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      mainMenuRenderer.move(1);
+      sfx.menuClick();
+    } else if (e.code === 'Enter') {
       const sel = mainMenuRenderer.selected;
-      if (sel === 'play') setScreen('lobby');
+      sfx.menuClick();
+      if (sel === 'play') enterLobby(false);
+      else if (sel === 'ddj-duel') enterLobby(true);
       else if (sel === 'instructions') setScreen('instructions');
     }
     return;
@@ -128,6 +287,10 @@ window.addEventListener('keydown', (e) => {
 
   if (clientScreen === 'lobby') {
     if (e.code === 'Escape') {
+      disposeAllSlots(slots);
+      duelFromMenu = false;
+      duelTeamPairKey = null;
+      slots = buildNormalSlots();
       setScreen('main-menu');
       return;
     }
@@ -138,10 +301,6 @@ window.addEventListener('keydown', (e) => {
       }
       return;
     }
-    // Opt-in: pressing a turn key while unregistered joins that binding
-    // as a new lobby slot. The KeyboardProvider's own listeners also
-    // catch this event, so by the time the snake exists the key is
-    // already tracked and the next game-loop poll will emit the turn.
     if (e.code === 'KeyA' || e.code === 'KeyD') requestRegister('wasd');
     else if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') requestRegister('arrows');
     return;
@@ -156,20 +315,15 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// --- Mouse (lobby host actions) ---
 function canvasToArena(e: MouseEvent): { x: number; y: number } {
   const rect = mainCanvas.getBoundingClientRect();
-  // The canvas is object-fit: contain inside its wrapper. Compute the actual
-  // drawn rect inside the element (letterboxed) and map from there.
   const elAR = rect.width / rect.height;
   const arenaAR = ARENA_WIDTH / ARENA_HEIGHT;
   let drawW = rect.width, drawH = rect.height, offX = 0, offY = 0;
   if (elAR > arenaAR) {
-    // pillarboxed
     drawW = rect.height * arenaAR;
     offX = (rect.width - drawW) / 2;
   } else {
-    // letterboxed
     drawH = rect.width / arenaAR;
     offY = (rect.height - drawH) / 2;
   }
@@ -182,8 +336,16 @@ function canvasToArena(e: MouseEvent): { x: number; y: number } {
 }
 
 mainCanvas.addEventListener('click', (e) => {
-  if (clientScreen !== 'lobby') return;
   const { x, y } = canvasToArena(e);
+  if (clientScreen === 'game-over') {
+    const action: GameOverAction | null = gameOverRenderer.hit(x, y);
+    if (!action) return;
+    sfx.menuClick();
+    if (action === 'restart') doRestart();
+    else if (action === 'main-menu') doMainMenuFromGameOver();
+    return;
+  }
+  if (clientScreen !== 'lobby') return;
   const action: LobbyAction | null = lobbyRenderer.hit(x, y);
   if (!action) return;
   if (action.type === 'pick-preset') {
@@ -199,17 +361,19 @@ mainCanvas.addEventListener('click', (e) => {
   }
 });
 
-// Change cursor over clickable zones for affordance.
 mainCanvas.addEventListener('mousemove', (e) => {
+  const { x, y } = canvasToArena(e);
+  if (clientScreen === 'game-over') {
+    mainCanvas.style.cursor = gameOverRenderer.hit(x, y) ? 'pointer' : 'default';
+    return;
+  }
   if (clientScreen !== 'lobby') {
     mainCanvas.style.cursor = 'default';
     return;
   }
-  const { x, y } = canvasToArena(e);
   mainCanvas.style.cursor = lobbyRenderer.hit(x, y) ? 'pointer' : 'default';
 });
 
-// --- Socket ---
 socket.on('connect', () => {
   console.log('[Client] Connected to server');
 });
@@ -220,8 +384,12 @@ socket.on('host:joined', ({ playerIndex, binding }) => {
   slot.state = 'registered';
   slot.playerIndex = playerIndex;
   slot.lastTurn = 0;
+  slot.lastTurnIntensity = 1;
   slot.lastActivate = false;
+  slot.lastTurbo = false;
+  slot.lastBrake = false;
   console.log(`[Client] ${slot.name} joined slot ${playerIndex + 1}`);
+  tryAssignDuelTeams();
 });
 
 socket.on('host:join-error', ({ reason, binding }) => {
@@ -236,27 +404,80 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
   if (snapshot.boardPreset) boardPreset = snapshot.boardPreset;
 
   if (snapshot.gamePhase === 'ingame') {
-    buffer.push(snapshot);
-    if (clientScreen !== 'ingame' && clientScreen !== 'exit-confirm') {
+    // Once the game-over modal is up, stop absorbing ingame snapshots —
+    // otherwise on an old (multi-round) server we'd keep feeding live
+    // frames into the buffer and the "frozen" background would visibly
+    // animate behind the popup.
+    if (clientScreen !== 'game-over') {
+      buffer.push(snapshot);
+      lastIngameSnapshot = snapshot;
+    }
+    // Enter the ingame screen on any incoming ingame snapshot — EXCEPT
+    // when we're parked on the game-over screen waiting for the player
+    // to hit Restart / Main Menu. The server's own 6s post-round timer
+    // will eventually return to lobby on its own.
+    if (
+      clientScreen !== 'ingame'
+      && clientScreen !== 'exit-confirm'
+      && clientScreen !== 'game-over'
+    ) {
       setScreen('ingame');
     }
+    // SFX + screen shake from snapshot diffs. Only run while in-game and not
+    // paused — otherwise queued effects could fire when the round resumes.
+    if (
+      prevSnapshotForEvents
+      && prevSnapshotForEvents.gamePhase === 'ingame'
+      && prevSnapshotForEvents.round.phase === snapshot.round.phase
+      && !snapshot.paused
+    ) {
+      const evs = diffSnapshots(prevSnapshotForEvents, snapshot);
+      for (const ev of evs) handleSnapshotEvent(ev);
+    }
+    prevSnapshotForEvents = snapshot;
   } else if (snapshot.gamePhase === 'lobby') {
+    prevSnapshotForEvents = null;
     if (clientScreen === 'ingame' || clientScreen === 'exit-confirm') {
-      setScreen('main-menu');
+      // Natural game end (round finished, server returned to lobby) takes
+      // the player to the game-over screen so they can see who won and
+      // pick Restart vs Main Menu. Manual exits (ESC → confirm → Y) clear
+      // `gameOverPending` themselves so they bypass this branch.
+      if (gameOverPending) {
+        gameOverPending = false;
+        setScreen('game-over');
+      } else {
+        disposeAllSlots(slots);
+        duelFromMenu = false;
+        duelTeamPairKey = null;
+        slots = buildNormalSlots();
+        setScreen('main-menu');
+      }
     }
   }
 
-  // Reconcile local slots: if the host kicked one from the lobby UI, its
-  // playerIndex disappears from lobbyPlayers — drop the registration so
-  // the same device can re-join by being used again.
   const activeIndices = new Set(snapshot.lobbyPlayers.map(p => p.index));
   for (const slot of Object.values(slots)) {
+    if (!slot) continue;
     if (slot.state === 'registered' && slot.playerIndex !== null && !activeIndices.has(slot.playerIndex)) {
       slot.state = 'idle';
       slot.playerIndex = null;
       slot.lastTurn = 0;
+      slot.lastTurnIntensity = 1;
       slot.lastActivate = false;
+      slot.lastTurbo = false;
+      slot.lastBrake = false;
     }
+  }
+
+  if (duelFromMenu) {
+    const d1 = slots['midi-deck1'];
+    const d2 = slots['midi-deck2'];
+    const both =
+      d1?.state === 'registered'
+      && d2?.state === 'registered'
+      && d1.playerIndex !== null
+      && d2.playerIndex !== null;
+    if (!both) duelTeamPairKey = null;
   }
 });
 
@@ -267,6 +488,9 @@ socket.on('game:reveal-update', (delta) => {
 socket.on('game:round-start', ({ roundNumber, tiles }) => {
   console.log(`[Game] Round ${roundNumber} starting with ${tiles?.length ?? 0} tiles`);
   renderer.resetRound();
+  prevSnapshotForEvents = null;
+  sfx.roundStart();
+  renderer.shake.add(0.35);
   if (tiles && tiles.length > 0) {
     renderer.loadTileImages(tiles).catch(err => {
       console.warn('[Game] Failed to load tile images:', err);
@@ -276,24 +500,89 @@ socket.on('game:round-start', ({ roundNumber, tiles }) => {
 
 socket.on('game:round-end', ({ roundNumber, winner, pairScores }) => {
   console.log(`[Game] Round ${roundNumber} ended`, pairScores);
+  sfx.roundEnd();
+  renderer.shake.add(0.5);
   if (winner) {
+    // Server's round-end payload has id + name + score but not the color.
+    // Pull the color from the snake in the latest snapshot.
+    const snake = latestSnapshot?.snakes.find(s => s.id === winner.id);
+    lastWinner = {
+      name: winner.name,
+      color: snake?.color ?? '#FFD700',
+      score: winner.score,
+    };
     renderer.showWinner(winner.name, winner.score);
+  } else {
+    lastWinner = null;
+  }
+  // Pop the game-over modal right when the round ends so the player sees
+  // the winner immediately (doesn't depend on the later gamePhase flip).
+  // We keep it on screen until the user clicks Restart or Main Menu.
+  console.log(`[GameOver] round-end received — clientScreen=${clientScreen}, winner=${winner?.name ?? 'none'}`);
+  if (clientScreen === 'ingame' || clientScreen === 'exit-confirm' || clientScreen === 'game-over') {
+    gameOverPending = false;
+    setScreen('game-over');
+  } else {
+    gameOverPending = true;
   }
 });
 
-/** Poll every local slot. For unregistered slots, detect "use" (any
- *  turn or boost signal) and kick off registration. For registered
- *  slots, emit input:turn / input:boost on change. */
+/** Fan a single snapshot event out to SFX + screen shake. */
+function handleSnapshotEvent(ev: SnapshotEvent): void {
+  switch (ev.kind) {
+    case 'death':
+      sfx.death();
+      renderer.shake.add(0.45);
+      break;
+    case 'pickup':
+      sfx.pickup();
+      renderer.shake.add(0.05);
+      break;
+    case 'activate':
+      sfx.activate();
+      renderer.shake.add(0.12);
+      break;
+    case 'effectEnd':
+      // Subtle, no shake.
+      break;
+    case 'frozen':
+      sfx.freeze();
+      renderer.shake.add(0.6);
+      break;
+    case 'shrunken':
+      sfx.lightning();
+      renderer.shake.add(0.7);
+      break;
+    case 'crippled':
+      sfx.cripple();
+      renderer.shake.add(0.4);
+      break;
+    case 'tileCaptured':
+      sfx.tileCapture();
+      break;
+    case 'pairMatched':
+      if (ev.isBonus) {
+        sfx.bonusMatch();
+        renderer.shake.add(0.85);
+      } else {
+        sfx.match();
+        renderer.shake.add(0.3);
+      }
+      break;
+    case 'pairNeutralized':
+      sfx.neutralized();
+      renderer.shake.add(0.18);
+      break;
+  }
+}
+
 function pollLocalSlots(): void {
   for (const slot of Object.values(slots)) {
+    if (!slot) continue;
     if (!slot.provider.isConnected()) continue;
     const state = slot.provider.poll();
-    // "Used" covers the normal case (mapped control is active). The
-    // optional hasRecentActivity() hook also opts-in on ANY input —
-    // useful for MIDI where the default mapping may not match the
-    // user's specific hardware, so just touching the device joins.
     const used = state.turnDirection !== 0 || state.activate
-              || (slot.provider.hasRecentActivity?.() ?? false);
+      || (slot.provider.hasRecentActivity?.() ?? false);
 
     if (slot.state === 'idle') {
       if (used) requestRegister(slot.binding);
@@ -301,21 +590,39 @@ function pollLocalSlots(): void {
     }
     if (slot.state !== 'registered' || slot.playerIndex === null) continue;
 
-    if (state.turnDirection !== slot.lastTurn) {
-      socket.emit('input:turn', slot.playerIndex, state.turnDirection);
+    const inten = state.turnIntensity ?? 1;
+    const intenQ = Math.round(inten * 12) / 12;
+    const lastQ = Math.round(slot.lastTurnIntensity * 12) / 12;
+    const turnChanged = state.turnDirection !== slot.lastTurn;
+    const intenChanged = state.turnDirection !== 0 && intenQ !== lastQ;
+    if (turnChanged || intenChanged) {
+      socket.emit(
+        'input:turn',
+        slot.playerIndex,
+        state.turnDirection,
+        state.turnDirection === 0 ? 1 : intenQ,
+      );
       slot.lastTurn = state.turnDirection;
+      slot.lastTurnIntensity = state.turnDirection === 0 ? 1 : intenQ;
     }
-    // Activate is edge-triggered: one emit on each rising edge (button
-    // press), nothing while held or on release. Mirrors how the phone
-    // slot-card tap emits a single input:activate.
     if (state.activate && !slot.lastActivate) {
       socket.emit('input:activate', slot.playerIndex);
     }
     slot.lastActivate = state.activate;
+
+    const turbo = !!state.turbo;
+    if (turbo !== slot.lastTurbo) {
+      socket.emit('input:turbo', slot.playerIndex, turbo);
+      slot.lastTurbo = turbo;
+    }
+    const brake = !!state.brake;
+    if (brake !== slot.lastBrake) {
+      socket.emit('input:brake', slot.playerIndex, brake);
+      slot.lastBrake = brake;
+    }
   }
 }
 
-// --- Game loop ---
 function gameLoop(): void {
   pollLocalSlots();
 
@@ -325,9 +632,14 @@ function gameLoop(): void {
     instructionsRenderer.render();
   } else if (clientScreen === 'lobby') {
     const lobbyPlayers = latestSnapshot?.lobbyPlayers ?? [];
-    lobbyRenderer.render(lobbyPlayers, boardPreset);
+    lobbyRenderer.render(lobbyPlayers, boardPreset, duelFromMenu);
+  } else if (clientScreen === 'game-over') {
+    // Draw the frozen final game frame behind the popup so the scoreboard
+    // + snake positions stay visible under the modal.
+    const bg = buffer.interpolate(Date.now()) ?? lastIngameSnapshot;
+    if (bg) renderer.render(bg);
+    gameOverRenderer.render(lastWinner);
   } else {
-    // ingame or exit-confirm
     const snapshot = buffer.interpolate(Date.now());
     if (snapshot) renderer.render(snapshot);
     if (clientScreen === 'exit-confirm') {
@@ -337,9 +649,16 @@ function gameLoop(): void {
   requestAnimationFrame(gameLoop);
 }
 
-// --- Start ---
-socket.connect();
-requestAnimationFrame(gameLoop);
+async function bootstrap(): Promise<void> {
+  midiRuntime = await loadDdjMidiConfig();
+  applyMidiHubRuntime(midiRuntime);
+  slots = buildNormalSlots();
+  applyMidiLaneMapsToHub();
+  socket.connect();
+  requestAnimationFrame(gameLoop);
+}
+
+void bootstrap();
 
 container.addEventListener('dblclick', () => {
   if (!document.fullscreenElement) {

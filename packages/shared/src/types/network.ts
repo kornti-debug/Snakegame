@@ -42,9 +42,11 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  'input:turn': (playerIndex: number, direction: -1 | 0 | 1) => void;
+  'input:turn': (playerIndex: number, direction: -1 | 0 | 1, turnIntensity?: number) => void;
   'input:boost': (playerIndex: number, active: boolean) => void;
   'input:activate': (playerIndex: number) => void;
+  'input:turbo': (playerIndex: number, active: boolean) => void;
+  'input:brake': (playerIndex: number, active: boolean) => void;
   'player:join': (payload: { name: string; playerIndex: number }) => void;
   'player:leave': (playerIndex: number) => void;
   'player:ready': (playerIndex: number) => void;

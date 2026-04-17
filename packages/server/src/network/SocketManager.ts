@@ -139,9 +139,19 @@ export class SocketManager {
         }
       });
 
-      socket.on('input:turn', (playerIndex, direction) => {
+      socket.on('input:turn', (playerIndex, direction, turnIntensity) => {
         const snake = this.room.getSnake(socket.id, playerIndex);
-        if (snake) snake.turnDirection = direction;
+        if (!snake) return;
+        snake.turnDirection = direction;
+        if (direction === 0) {
+          snake.turnIntensity = 1;
+          return;
+        }
+        if (typeof turnIntensity === 'number' && Number.isFinite(turnIntensity)) {
+          snake.turnIntensity = Math.min(1, Math.max(0.08, turnIntensity));
+        } else {
+          snake.turnIntensity = 1;
+        }
       });
 
       socket.on('input:boost', (playerIndex, active) => {
@@ -152,6 +162,16 @@ export class SocketManager {
       socket.on('input:activate', (playerIndex) => {
         const snake = this.room.getSnake(socket.id, playerIndex);
         if (snake) this.room.powerUpSystem.activateSlot(snake, this.room.getAllSnakes());
+      });
+
+      socket.on('input:turbo', (playerIndex, active) => {
+        const snake = this.room.getSnake(socket.id, playerIndex);
+        if (snake) snake.turboPressed = !!active;
+      });
+
+      socket.on('input:brake', (playerIndex, active) => {
+        const snake = this.room.getSnake(socket.id, playerIndex);
+        if (snake) snake.brakePressed = !!active;
       });
 
       socket.on('disconnect', () => {

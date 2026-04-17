@@ -13,23 +13,14 @@ export class RevealLayer {
     this.fillMask();
   }
 
-  /** Fill the entire canvas with the opaque cover */
+  /** Fill the entire canvas with the opaque cover (unrevealed “fog”). */
   fillMask(): void {
     const ctx = this.ctx;
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = '#222233';
+    // Solid slate: matches lobby/arena (#0a0a1a family), contrasts with tile outlines (#8a9cad) and UI greens.
+    // Dark fog vs light tile backing in BackgroundLayer — strong hole edge.
+    ctx.fillStyle = '#0b0d14';
     ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
-
-    // Subtle pattern on the cover
-    ctx.fillStyle = 'rgba(255,255,255,0.02)';
-    const step = 20;
-    for (let x = 0; x < ARENA_WIDTH; x += step) {
-      for (let y = 0; y < ARENA_HEIGHT; y += step) {
-        if ((x + y) % (step * 2) === 0) {
-          ctx.fillRect(x, y, step, step);
-        }
-      }
-    }
   }
 
   /** Punch holes in the mask for newly revealed blocks */

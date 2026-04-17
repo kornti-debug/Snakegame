@@ -1,0 +1,20 @@
+{
+  "midiInputNameIncludes": "DDJ-400",
+  "debugMidi": false,
+  "decks": [
+    {
+      "name": "deck1-left",
+      "turn": { "type": "cc-jog", "controllers": [33, 34, 35], "channel": 0 },
+      "activate": { "type": "note", "note": 11, "channel": 0 },
+      "turbo": { "type": "note", "note": 12, "channel": 0 },
+      "brake": { "type": "note", "note": 11, "channel": 0 }
+    },
+    {
+      "name": "deck2-right",
+      "turn": { "type": "cc-jog", "controllers": [33, 34, 35], "channel": 1 },
+      "activate": { "type": "note", "note": 11, "channel": 1 },
+      "turbo": { "type": "note", "note": 12, "channel": 1 },
+      "brake": { "type": "note", "note": 11, "channel": 1 }
+    }
+  ]
+}
