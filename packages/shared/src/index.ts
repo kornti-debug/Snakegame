@@ -5,7 +5,9 @@ export type {
   TwitchViewer, HintState, BoidState,
   BoardConfig, BoardPreset,
 } from './types/game.js';
-export type { ServerToClientEvents, ClientToServerEvents, InterServerEvents, SocketData } from './types/network.js';
+export type {
+  ServerToClientEvents, ClientToServerEvents, InterServerEvents, SocketData, RoundEndReason,
+} from './types/network.js';
 export type { InputState } from './types/input.js';
 
 export * from './constants.js';

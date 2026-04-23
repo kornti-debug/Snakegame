@@ -1,11 +1,11 @@
 import type { PowerUpDefinition } from './PowerUpRegistry.js';
-import { STAR_DURATION } from '@snakegame/shared';
+import { TUNING } from '../config/tuning.js';
 
 export const Star: PowerUpDefinition = {
   id: 'star',
   displayName: 'Star',
-  spawnWeight: 3, // rare
-  duration: STAR_DURATION,
+  get spawnWeight() { return TUNING.powerups.star.spawnWeight; },
+  get duration()    { return TUNING.powerups.star.durationMs; },
   kind: 'active',
   onApply(snake) {
     snake.starred = true;

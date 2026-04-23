@@ -229,7 +229,7 @@ export function createExternalRouter(room: GameRoom, apiKey: string): Router {
   });
 
   router.post('/round/end', (_req, res) => {
-    room.roundManager.forceEndRound();
+    room.forceEndRoundWithNotification('admin');
     res.json({ ok: true });
   });
 

@@ -1,11 +1,11 @@
 import type { PowerUpDefinition } from './PowerUpRegistry.js';
-import { GHOST_DURATION } from '@snakegame/shared';
+import { TUNING } from '../config/tuning.js';
 
 export const Ghost: PowerUpDefinition = {
   id: 'ghost',
   displayName: 'Ghost',
-  spawnWeight: 5,
-  duration: GHOST_DURATION,
+  get spawnWeight() { return TUNING.powerups.ghost.spawnWeight; },
+  get duration()    { return TUNING.powerups.ghost.durationMs; },
   kind: 'active',
   onApply(snake) {
     snake.ghosting = true;

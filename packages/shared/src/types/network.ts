@@ -1,5 +1,12 @@
 import type { GameSnapshot, RevealDelta, MemoryTile, BoardPreset } from './game.js';
 
+/** Why the memory round stopped — shown on the winner popup for clarity. */
+export type RoundEndReason =
+  | 'decisive-lead'
+  | 'board-complete'
+  | 'viewer-guess'
+  | 'admin';
+
 export interface ServerToClientEvents {
   'phone:joined': (payload: { playerIndex: number; color: string }) => void;
   'phone:join-error': (payload: { reason: string }) => void;
@@ -21,6 +28,7 @@ export interface ServerToClientEvents {
     winner: { id: string; name: string; score: number } | null;
     scores: Record<string, number>;
     pairScores: Record<string, number>;
+    reason: RoundEndReason;
   }) => void;
   'game:tile-captured': (payload: {
     tileId: number;

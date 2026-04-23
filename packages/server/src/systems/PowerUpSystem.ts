@@ -16,11 +16,10 @@ import { Cripple } from '../powerups/Cripple.js';
 import {
   ARENA_WIDTH,
   ARENA_HEIGHT,
-  POWERUP_SPAWN_INTERVAL,
-  POWERUP_MAX_ACTIVE,
   POWERUP_COLLECT_RADIUS,
   distanceSq,
 } from '@snakegame/shared';
+import { TUNING } from '../config/tuning.js';
 
 interface ActiveEffect {
   snakeId: string;
@@ -33,7 +32,7 @@ export class PowerUpSystem {
   readonly registry = new PowerUpRegistry();
   private fieldPowerUps: PowerUp[] = [];
   private activeEffects: ActiveEffect[] = [];
-  private spawnTimer = POWERUP_SPAWN_INTERVAL;
+  private spawnTimer = TUNING.powerups.spawnIntervalMs;
 
   constructor() {
     this.registry.register(SpeedBoost);
@@ -55,9 +54,9 @@ export class PowerUpSystem {
 
     // Spawn timer
     this.spawnTimer -= dtMs;
-    if (this.spawnTimer <= 0 && this.fieldPowerUps.length < POWERUP_MAX_ACTIVE) {
+    if (this.spawnTimer <= 0 && this.fieldPowerUps.length < TUNING.powerups.maxActive) {
       this.spawnRandom();
-      this.spawnTimer = POWERUP_SPAWN_INTERVAL;
+      this.spawnTimer = TUNING.powerups.spawnIntervalMs;
     }
 
     // Check collection
@@ -166,7 +165,7 @@ export class PowerUpSystem {
   reset(): void {
     this.fieldPowerUps = [];
     this.activeEffects = [];
-    this.spawnTimer = POWERUP_SPAWN_INTERVAL;
+    this.spawnTimer = TUNING.powerups.spawnIntervalMs;
   }
 
   /** Get drain fractions for a specific snake: effectId → 0..1 (1 = just started) */

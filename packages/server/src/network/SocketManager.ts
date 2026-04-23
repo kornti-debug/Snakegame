@@ -251,12 +251,14 @@ export class SocketManager {
           winner: event.winner,
           scores: event.scores,
           pairScores: event.pairScores,
+          reason: event.reason,
         });
         this.tdNamespace.emit('event:round-end', {
           roundNumber: event.roundNumber,
           winner: event.winner,
           scores: event.scores,
           pairScores: event.pairScores,
+          reason: event.reason,
         });
       } else if (event.type === 'tile-captured') {
         this.io.emit('game:tile-captured', {

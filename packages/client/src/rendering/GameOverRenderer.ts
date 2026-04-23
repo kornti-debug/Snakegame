@@ -1,11 +1,24 @@
 import { ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
+import type { RoundEndReason } from '@snakegame/shared';
 
 export type GameOverAction = 'restart' | 'main-menu';
+
+export type GameOverBanner = {
+  winner: { name: string; color: string; score: number } | null;
+  reason: RoundEndReason;
+};
 
 interface HitZone {
   x: number; y: number; w: number; h: number;
   action: GameOverAction;
 }
+
+const REASON_SUBTITLE: Record<RoundEndReason, string> = {
+  'decisive-lead': 'Pair score can no longer be caught — round over!',
+  'board-complete': 'Every pair has been matched — round over!',
+  'viewer-guess': 'Stream / audience guess ended the round.',
+  'admin': 'Host or external control ended the round.',
+};
 
 /** End-of-game modal popup. Drawn as an overlay on top of whatever the
  *  caller already rendered (the last in-game frame) — semi-transparent
@@ -30,19 +43,24 @@ export class GameOverRenderer {
     return null;
   }
 
-  /** `winner` is null on a draw / game ended without a decisive winner. */
-  render(winner: { name: string; color: string; score: number } | null): void {
+  /** `banner` is null only before the first round-end of a session — draws
+   *  a minimal safe state. */
+  render(banner: GameOverBanner | null): void {
+    const b: GameOverBanner = banner ?? {
+      winner: null,
+      reason: 'board-complete',
+    };
     const ctx = this.ctx;
     this.pulseTime += 0.04;
     this.hitZones = [];
 
     // Dim whatever was drawn behind (the frozen game state).
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
     ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
     // Modal card
-    const cardW = 900;
-    const cardH = 560;
+    const cardW = 920;
+    const cardH = 600;
     const cardX = (ARENA_WIDTH - cardW) / 2;
     const cardY = (ARENA_HEIGHT - cardH) / 2;
 
@@ -50,12 +68,12 @@ export class GameOverRenderer {
     ctx.fillRect(cardX, cardY, cardW, cardH);
 
     // Pulsing winner-colored border (soft golden if draw).
-    const borderColor = winner?.color ?? '#feca57';
+    const borderColor = b.winner?.color ?? '#feca57';
     const pulse = 0.6 + Math.sin(this.pulseTime * 3) * 0.4;
     ctx.save();
     ctx.shadowColor = borderColor;
     ctx.shadowBlur = 24 + pulse * 24;
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 5;
     ctx.strokeStyle = borderColor;
     ctx.strokeRect(cardX, cardY, cardW, cardH);
     ctx.restore();
@@ -63,36 +81,44 @@ export class GameOverRenderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Eyebrow
-    ctx.font = 'bold 26px monospace';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-    ctx.fillText('GAME OVER', ARENA_WIDTH / 2, cardY + 70);
+    // Top: clear headline
+    ctx.font = 'bold 34px monospace';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('ROUND COMPLETE', ARENA_WIDTH / 2, cardY + 52);
 
-    if (winner) {
+    ctx.font = '20px monospace';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.fillText(REASON_SUBTITLE[b.reason], ARENA_WIDTH / 2, cardY + 92);
+
+    if (b.winner) {
+      ctx.font = 'bold 28px monospace';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.fillText('WINNER', ARENA_WIDTH / 2, cardY + 150);
+
       // Big winner name in the player's color with a soft glow.
       ctx.save();
-      ctx.shadowColor = winner.color;
+      ctx.shadowColor = b.winner.color;
       ctx.shadowBlur = 26 + pulse * 20;
-      ctx.font = 'bold 88px monospace';
-      ctx.fillStyle = winner.color;
-      ctx.fillText(winner.name.toUpperCase(), ARENA_WIDTH / 2, cardY + 200);
+      ctx.font = 'bold 86px monospace';
+      ctx.fillStyle = b.winner.color;
+      ctx.fillText(b.winner.name.toUpperCase(), ARENA_WIDTH / 2, cardY + 240);
       ctx.restore();
 
-      ctx.font = 'bold 36px monospace';
+      ctx.font = 'bold 32px monospace';
       ctx.fillStyle = '#fff';
-      ctx.fillText('WINS', ARENA_WIDTH / 2, cardY + 280);
+      ctx.fillText('WINS', ARENA_WIDTH / 2, cardY + 318);
 
-      ctx.font = 'bold 24px monospace';
-      ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
-      const pairLabel = winner.score === 1 ? 'pair' : 'pairs';
-      ctx.fillText(`${winner.score} ${pairLabel} matched`, ARENA_WIDTH / 2, cardY + 330);
+      ctx.font = 'bold 22px monospace';
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.95)';
+      const pairLabel = b.winner.score === 1 ? 'pair' : 'pairs';
+      ctx.fillText(`${b.winner.score} ${pairLabel} matched`, ARENA_WIDTH / 2, cardY + 368);
     } else {
-      ctx.font = 'bold 80px monospace';
+      ctx.font = 'bold 72px monospace';
       ctx.fillStyle = '#feca57';
-      ctx.fillText('DRAW', ARENA_WIDTH / 2, cardY + 230);
-      ctx.font = 'bold 24px monospace';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.fillText('No decisive winner', ARENA_WIDTH / 2, cardY + 300);
+      ctx.fillText('DRAW', ARENA_WIDTH / 2, cardY + 260);
+      ctx.font = 'bold 22px monospace';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.fillText('No single winner — tied at the top', ARENA_WIDTH / 2, cardY + 340);
     }
 
     // Buttons row
@@ -101,7 +127,7 @@ export class GameOverRenderer {
     const gap = 40;
     const totalW = btnW * 2 + gap;
     const startX = (ARENA_WIDTH - totalW) / 2;
-    const btnY = cardY + cardH - btnH - 50;
+    const btnY = cardY + cardH - btnH - 48;
 
     this.drawButton(ctx, startX, btnY, btnW, btnH, 'RESTART', '#44ff44', 'restart');
     this.drawButton(ctx, startX + btnW + gap, btnY, btnW, btnH, 'MAIN MENU', '#ff8844', 'main-menu');

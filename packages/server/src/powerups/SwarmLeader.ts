@@ -1,11 +1,11 @@
 import type { PowerUpDefinition } from './PowerUpRegistry.js';
-import { SWARM_LEADER_DURATION } from '@snakegame/shared';
+import { TUNING } from '../config/tuning.js';
 
 export const SwarmLeader: PowerUpDefinition = {
   id: 'swarm-leader',
   displayName: 'Swarm Leader',
-  spawnWeight: 4,
-  duration: SWARM_LEADER_DURATION,
+  get spawnWeight() { return TUNING.powerups.swarmLeader.spawnWeight; },
+  get duration()    { return TUNING.powerups.swarmLeader.durationMs; },
   kind: 'active',
   onApply(snake) {
     snake.swarmLeader = true;

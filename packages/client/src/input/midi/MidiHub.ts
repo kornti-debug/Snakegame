@@ -6,6 +6,11 @@ function ccListForTurn(m: NonNullable<MidiMap['turn']>): number[] {
   return [];
 }
 
+function analogEnergyCcList(m: NonNullable<MidiMap['turn']>): number[] {
+  if (m.type !== 'cc-jog' || !m.analogEnergyCcs?.length) return [];
+  return [...m.analogEnergyCcs];
+}
+
 const MSG_NOTE_OFF = 0x80;
 const MSG_NOTE_ON = 0x90;
 const MSG_CC = 0xB0;
@@ -22,7 +27,7 @@ const JOG_COAST_BEFORE_DECAY_MS = 26;
 function intensityFromWindowPulseCount(n: number): number {
   if (n <= 0) return 0.22;
   // n=1 gentle nudge; ~7+ pulses in 50ms (incl. fast L/R) → full scratch
-  return Math.min(1, 0.17 + (n - 1) * 0.14);
+  return Math.min(1, 0.15 + (n - 1) * 0.13);
 }
 
 type LaneState = {
@@ -36,8 +41,14 @@ type LaneState = {
   lastJogAt: number;
   /** Timestamps of jog CCs in the recent window (for pulse-rate intensity). */
   jogPulseTimes: number[];
-  /** 0..1 from pulse count in JOG_INTENSITY_WINDOW_MS (direction-agnostic). */
+  /** 0..1 from pulse rate + analog blend (smoothed in refresh). */
   turnIntensity: number;
+  /** EMA-smoothed output of `turnIntensity` for less stair-step feel. */
+  smoothedIntensity: number;
+  /** From high-rate platter CC traffic (even when value ≈ 64). Decays in refresh. */
+  instantRateBoost: number;
+  /** EMA of |CC−64| on jog / analog CCs — fills in gentle nudges. */
+  analogMagEma: number;
   /** Last time a message matched this lane's map (CC/note). */
   lastMappedActivityAt: number;
 };
@@ -106,6 +117,9 @@ export class MidiHub {
       lastJogAt: 0,
       jogPulseTimes: [],
       turnIntensity: 1,
+      smoothedIntensity: 1,
+      instantRateBoost: 0,
+      analogMagEma: 0,
       lastMappedActivityAt: 0,
     });
     void this.ensureInit();
@@ -142,24 +156,36 @@ export class MidiHub {
     const lane = this.lanes.get(laneId);
     if (!lane || lane.map.turn?.type !== 'cc-jog') return;
 
+    lane.instantRateBoost *= 0.87;
+
     lane.jogPulseTimes = lane.jogPulseTimes.filter(t => now - t <= JOG_INTENSITY_WINDOW_MS);
     const n = lane.jogPulseTimes.length;
 
     if (n > 0) {
-      lane.turnIntensity = intensityFromWindowPulseCount(n);
+      const pulseI = intensityFromWindowPulseCount(n);
+      const fromAnalogMag = Math.min(1, 0.1 + lane.analogMagEma * 0.42);
+      const raw = Math.min(1, Math.max(pulseI, lane.instantRateBoost * 0.92, fromAnalogMag));
+      lane.smoothedIntensity = lane.smoothedIntensity * 0.58 + raw * 0.42;
+      lane.turnIntensity = lane.smoothedIntensity;
       return;
     }
 
     if (lane.lastJogAt > 0 && now - lane.lastJogAt > JOG_SILENCE_RELEASE_MS) {
       lane.turn = 0;
       lane.turnIntensity = 1;
+      lane.smoothedIntensity = 1;
       lane.lastJogAt = 0;
       lane.jogPulseTimes = [];
+      lane.instantRateBoost = 0;
+      lane.analogMagEma = 0;
       return;
     }
 
     if (lane.turn !== 0 && lane.lastJogAt > 0 && now - lane.lastJogAt > JOG_COAST_BEFORE_DECAY_MS) {
-      lane.turnIntensity = Math.max(0.14, lane.turnIntensity * 0.86);
+      lane.instantRateBoost *= 0.91;
+      const decayTarget = Math.max(0.14, lane.turnIntensity * 0.86);
+      lane.smoothedIntensity = lane.smoothedIntensity * 0.62 + decayTarget * 0.38;
+      lane.turnIntensity = lane.smoothedIntensity;
     }
   }
 
@@ -191,6 +217,12 @@ export class MidiHub {
     }
   }
 
+  private pushJogPulse(lane: LaneState, now: number): void {
+    lane.jogPulseTimes.push(now);
+    if (lane.jogPulseTimes.length > 56) lane.jogPulseTimes.splice(0, lane.jogPulseTimes.length - 56);
+    lane.jogPulseTimes = lane.jogPulseTimes.filter(t => now - t <= JOG_INTENSITY_WINDOW_MS);
+  }
+
   private dispatch(data: Uint8Array, now: number): void {
     const status = data[0];
     const kind = status & 0xf0;
@@ -200,6 +232,24 @@ export class MidiHub {
       const controller = data[1];
       const value = data[2] ?? 0;
       if (this.debug) console.log(`[midi] CC  ch=${channel} ctrl=${controller} val=${value}`);
+
+      // --- Extra “energy” CCs (e.g. CC 2 breath) — never steer, only pulses + EMA ---
+      for (const lane of this.lanes.values()) {
+        const m = lane.map.turn;
+        if (!m || m.type !== 'cc-jog') continue;
+        if (m.channel !== undefined && m.channel !== channel) continue;
+        const extras = analogEnergyCcList(m);
+        if (!extras.includes(controller)) continue;
+        lane.lastMappedActivityAt = now;
+        const prevAt = lane.lastJogAt;
+        lane.lastJogAt = now;
+        const gapMs = prevAt > 0 ? Math.max(0.35, Math.min(100, now - prevAt)) : 100;
+        lane.instantRateBoost = Math.max(lane.instantRateBoost, Math.min(1, 46 / gapMs));
+        this.pushJogPulse(lane, now);
+        const dev = Math.abs(value - 64);
+        lane.analogMagEma = lane.analogMagEma * 0.72 + dev * 0.28;
+      }
+
       for (const lane of this.lanes.values()) {
         const m = lane.map.turn;
         if (!m) continue;
@@ -212,14 +262,28 @@ export class MidiHub {
           else if (value > 73) lane.turn = 1;
           else lane.turn = 0;
           lane.turnIntensity = 1;
+          lane.smoothedIntensity = 1;
         } else {
-          if (value > 64) lane.turn = 1;
-          else if (value < 64) lane.turn = -1;
+          const prevAt = lane.lastJogAt;
           lane.lastJogAt = now;
-          lane.jogPulseTimes.push(now);
-          if (lane.jogPulseTimes.length > 48) lane.jogPulseTimes.splice(0, lane.jogPulseTimes.length - 48);
-          lane.jogPulseTimes = lane.jogPulseTimes.filter(t => now - t <= JOG_INTENSITY_WINDOW_MS);
-          lane.turnIntensity = intensityFromWindowPulseCount(lane.jogPulseTimes.length);
+          const gapMs = prevAt > 0 ? Math.max(0.35, Math.min(100, now - prevAt)) : 100;
+          lane.instantRateBoost = Math.max(lane.instantRateBoost, Math.min(1, 46 / gapMs));
+
+          // Hysteresis around 64 so rapid 63↔65 traffic does not flip direction
+          // every packet — feels more “analog”.
+          if (value > 65) lane.turn = 1;
+          else if (value < 63) lane.turn = -1;
+          else if (lane.turn === 0) {
+            if (value > 64) lane.turn = 1;
+            else if (value < 64) lane.turn = -1;
+          }
+
+          const dev = Math.abs(value - 64);
+          lane.analogMagEma = lane.analogMagEma * 0.78 + dev * 0.22;
+
+          this.pushJogPulse(lane, now);
+          // `turnIntensity` is derived in refreshJogStateForLane from pulses +
+          // rate / EMA so we do not double-smooth here.
         }
       }
     } else if (kind === MSG_NOTE_ON || kind === MSG_NOTE_OFF) {

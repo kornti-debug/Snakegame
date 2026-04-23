@@ -7,14 +7,10 @@ import {
   SNAKE_SEGMENT_SPACING,
   SNAKE_INITIAL_LENGTH,
   REVEAL_BRUSH_RADIUS,
-  TURBO_MULTIPLIER,
-  TURBO_MAX_MS,
-  TURBO_COOLDOWN_MS,
-  BRAKE_DURATION_MS,
-  BRAKE_COOLDOWN_MS,
   headingToVector,
   distance,
 } from '@snakegame/shared';
+import { TUNING } from '../config/tuning.js';
 
 export class Snake {
   readonly id: string;
@@ -147,13 +143,13 @@ export class Snake {
       if (this.brakeRemainingMs <= 0) {
         this.brakeActive = false;
         this.brakeRemainingMs = 0;
-        this.brakeCooldownMs = BRAKE_COOLDOWN_MS;
+        this.brakeCooldownMs = TUNING.brake.cooldownMs;
       }
     } else if (this.brakeCooldownMs > 0) {
       this.brakeCooldownMs = Math.max(0, this.brakeCooldownMs - dtMs);
     } else if (this.brakePressed) {
       this.brakeActive = true;
-      this.brakeRemainingMs = BRAKE_DURATION_MS;
+      this.brakeRemainingMs = TUNING.brake.durationMs;
     }
 
     // --- Turbo ---
@@ -163,15 +159,15 @@ export class Snake {
     } else if (this.turboPressed) {
       this.turboActive = true;
       this.turboHeldMs += dtMs;
-      if (this.turboHeldMs >= TURBO_MAX_MS) {
+      if (this.turboHeldMs >= TUNING.turbo.maxMs) {
         this.turboActive = false;
-        this.turboCooldownMs = TURBO_COOLDOWN_MS;
+        this.turboCooldownMs = TUNING.turbo.cooldownMs;
         this.turboHeldMs = 0;
       }
     } else {
       if (this.turboHeldMs > 0) {
         // Released before max — small cooldown to discourage mashing.
-        this.turboCooldownMs = TURBO_COOLDOWN_MS;
+        this.turboCooldownMs = TUNING.turbo.cooldownMs;
         this.turboHeldMs = 0;
       }
       this.turboActive = false;
@@ -182,7 +178,7 @@ export class Snake {
    *  of whatever powerups have set `snake.speed` to. */
   getEffectiveSpeed(): number {
     if (this.brakeActive) return 0;
-    if (this.turboActive) return this.speed * TURBO_MULTIPLIER;
+    if (this.turboActive) return this.speed * TUNING.turbo.multiplier;
     return this.speed;
   }
 

@@ -1,0 +1,29 @@
+{
+  "_comment": "Live-tunable gameplay parameters. Times are in milliseconds. Edit values and restart the server (`npm run dev:server`) — tsx-watch does NOT auto-reload JSON.",
+
+  "turbo": {
+    "multiplier": 1.75,
+    "maxMs": 2000,
+    "cooldownMs": 400
+  },
+  "brake": {
+    "durationMs": 500,
+    "cooldownMs": 800
+  },
+
+  "round": {
+    "waitTimeMs": 5000,
+    "endDisplayMs": 6000
+  },
+
+  "powerups": {
+    "spawnIntervalMs": 8000,
+    "maxActive": 3,
+    "speedBoost":  { "durationMs": 5000, "multiplier": 1.5, "spawnWeight": 10 },
+    "wideTrail":   { "durationMs": 5000, "multiplier": 2.5, "spawnWeight": 8 },
+    "ghost":       { "durationMs": 3000,                     "spawnWeight": 5 },
+    "star":        { "durationMs": 5000,                     "spawnWeight": 3 },
+    "swarmLeader": { "durationMs": 8000,                     "spawnWeight": 4 },
+    "predator":    { "durationMs": 6000,                     "spawnWeight": 5 }
+  }
+}

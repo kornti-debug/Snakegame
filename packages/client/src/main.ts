@@ -5,7 +5,7 @@ import { LobbyRenderer, type LobbyAction } from './rendering/LobbyRenderer.js';
 import { MainMenuRenderer } from './rendering/MainMenuRenderer.js';
 import { InstructionsRenderer } from './rendering/InstructionsRenderer.js';
 import { ConfirmDialogRenderer } from './rendering/ConfirmDialogRenderer.js';
-import { GameOverRenderer, type GameOverAction } from './rendering/GameOverRenderer.js';
+import { GameOverRenderer, type GameOverAction, type GameOverBanner } from './rendering/GameOverRenderer.js';
 import { BackgroundBoids } from './rendering/BackgroundBoids.js';
 import { QrCache } from './rendering/QrCache.js';
 import { KeyboardProvider } from './input/KeyboardProvider.js';
@@ -15,7 +15,7 @@ import { MidiHub } from './input/midi/MidiHub.js';
 import { MidiDeckProvider } from './input/midi/MidiDeckProvider.js';
 import { loadDdjMidiConfig, type ResolvedDdjMidiConfig } from './input/midi/loadDdjMidiConfig.js';
 import type { InputProvider } from './input/InputProvider.js';
-import type { GameSnapshot, BoardPreset } from '@snakegame/shared';
+import type { GameSnapshot, BoardPreset, RoundEndReason } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, DEFAULT_BOARD_PRESET } from '@snakegame/shared';
 import { sfx } from './audio/SfxEngine.js';
 import { diffSnapshots, type SnapshotEvent } from './audio/SnapshotEvents.js';
@@ -50,10 +50,9 @@ let latestSnapshot: GameSnapshot | null = null;
 let prevSnapshotForEvents: GameSnapshot | null = null;
 let boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
 
-/** Winner info captured from the most recent `game:round-end`. Drives the
- *  game-over screen when the server flips back to the lobby phase. Cleared
- *  on entering a new game so stale info can't leak between sessions. */
-let lastWinner: { name: string; color: string; score: number } | null = null;
+/** Winner + end reason from the most recent `game:round-end`. Drives the
+ *  game-over modal. Cleared on restart / main menu. */
+let lastGameOver: GameOverBanner | null = null;
 let gameOverPending = false;
 /** Last in-game snapshot, used as the frozen background behind the
  *  game-over modal after the server has already flipped back to lobby. */
@@ -213,7 +212,7 @@ function setScreen(next: ClientScreen): void {
 }
 
 function doRestart(): void {
-  lastWinner = null;
+  lastGameOver = null;
   gameOverPending = false;
   // Force the server back to the lobby immediately — otherwise it would
   // auto-return on its own timer 6s after round end, and in the meantime
@@ -224,7 +223,7 @@ function doRestart(): void {
 }
 
 function doMainMenuFromGameOver(): void {
-  lastWinner = null;
+  lastGameOver = null;
   gameOverPending = false;
   socket.emit('lobby:return');
   disposeAllSlots(slots);
@@ -498,27 +497,29 @@ socket.on('game:round-start', ({ roundNumber, tiles }) => {
   }
 });
 
-socket.on('game:round-end', ({ roundNumber, winner, pairScores }) => {
-  console.log(`[Game] Round ${roundNumber} ended`, pairScores);
+socket.on('game:round-end', ({ roundNumber, winner, pairScores, reason }) => {
+  console.log(`[Game] Round ${roundNumber} ended`, pairScores, reason);
   sfx.roundEnd();
-  renderer.shake.add(0.5);
+  renderer.shake.add(0.65);
+  const endReason: RoundEndReason = reason ?? 'board-complete';
   if (winner) {
     // Server's round-end payload has id + name + score but not the color.
-    // Pull the color from the snake in the latest snapshot.
     const snake = latestSnapshot?.snakes.find(s => s.id === winner.id);
-    lastWinner = {
-      name: winner.name,
-      color: snake?.color ?? '#FFD700',
-      score: winner.score,
+    lastGameOver = {
+      winner: {
+        name: winner.name,
+        color: snake?.color ?? '#FFD700',
+        score: winner.score,
+      },
+      reason: endReason,
     };
     renderer.showWinner(winner.name, winner.score);
   } else {
-    lastWinner = null;
+    lastGameOver = { winner: null, reason: endReason };
   }
-  // Pop the game-over modal right when the round ends so the player sees
-  // the winner immediately (doesn't depend on the later gamePhase flip).
-  // We keep it on screen until the user clicks Restart or Main Menu.
-  console.log(`[GameOver] round-end received — clientScreen=${clientScreen}, winner=${winner?.name ?? 'none'}`);
+  // Pop the game-over modal immediately — `round-end` was never emitted from
+  // the normal memory win path before (RoundManager.update never returns
+  // 'ended'); the server now always queues this event with `forceEndRound`.
   if (clientScreen === 'ingame' || clientScreen === 'exit-confirm' || clientScreen === 'game-over') {
     gameOverPending = false;
     setScreen('game-over');
@@ -591,8 +592,8 @@ function pollLocalSlots(): void {
     if (slot.state !== 'registered' || slot.playerIndex === null) continue;
 
     const inten = state.turnIntensity ?? 1;
-    const intenQ = Math.round(inten * 12) / 12;
-    const lastQ = Math.round(slot.lastTurnIntensity * 12) / 12;
+    const intenQ = Math.round(inten * 24) / 24;
+    const lastQ = Math.round(slot.lastTurnIntensity * 24) / 24;
     const turnChanged = state.turnDirection !== slot.lastTurn;
     const intenChanged = state.turnDirection !== 0 && intenQ !== lastQ;
     if (turnChanged || intenChanged) {
@@ -638,7 +639,7 @@ function gameLoop(): void {
     // + snake positions stay visible under the modal.
     const bg = buffer.interpolate(Date.now()) ?? lastIngameSnapshot;
     if (bg) renderer.render(bg);
-    gameOverRenderer.render(lastWinner);
+    gameOverRenderer.render(lastGameOver);
   } else {
     const snapshot = buffer.interpolate(Date.now());
     if (snapshot) renderer.render(snapshot);

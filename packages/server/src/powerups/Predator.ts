@@ -1,11 +1,11 @@
 import type { PowerUpDefinition } from './PowerUpRegistry.js';
-import { PREDATOR_DURATION } from '@snakegame/shared';
+import { TUNING } from '../config/tuning.js';
 
 export const Predator: PowerUpDefinition = {
   id: 'predator',
   displayName: 'Predator',
-  spawnWeight: 5,
-  duration: PREDATOR_DURATION,
+  get spawnWeight() { return TUNING.powerups.predator.spawnWeight; },
+  get duration()    { return TUNING.powerups.predator.durationMs; },
   kind: 'active',
   onApply(snake) {
     snake.predator = true;

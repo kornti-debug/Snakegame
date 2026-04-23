@@ -2,7 +2,16 @@
 export type MidiMap = {
   turn?:
     | { type: 'cc-fader'; controller?: number; controllers?: number[]; channel?: number }
-    | { type: 'cc-jog'; controller?: number; controllers?: number[]; channel?: number };
+    | {
+        type: 'cc-jog';
+        controller?: number;
+        controllers?: number[];
+        channel?: number;
+        /** Same MIDI channel as the jog CCs: extra controllers that only add
+         *  “scratch energy” (pulse rate + deviation) for smoother intensity,
+         *  never direction — e.g. DDJ-400 sends CC 2 alongside platter traffic. */
+        analogEnergyCcs?: number[];
+      };
   activate?: { type: 'note'; note: number; channel?: number };
   /** Held-button "turbo" pad. Server applies a speed multiplier while
    *  down, with a time limit + cooldown to prevent infinite use. */
@@ -21,7 +30,7 @@ export type MidiMap = {
  * intended gameplay action). Note 12 = CUE, used as turbo.
  */
 export const DDJ400_MAP: MidiMap = {
-  turn: { type: 'cc-jog', controllers: [33, 34, 35], channel: 0 },
+  turn: { type: 'cc-jog', controllers: [33, 34, 35], channel: 0, analogEnergyCcs: [2] },
   activate: { type: 'note', note: 11, channel: 0 },
   turbo: { type: 'note', note: 12, channel: 0 },
   brake: { type: 'note', note: 11, channel: 0 },
@@ -32,7 +41,7 @@ export const DDJ400_MAP: MidiMap = {
  * (status 0xB1…).
  */
 export const DDJ400_DECK2_MAP: MidiMap = {
-  turn: { type: 'cc-jog', controllers: [33, 34, 35], channel: 1 },
+  turn: { type: 'cc-jog', controllers: [33, 34, 35], channel: 1, analogEnergyCcs: [2] },
   activate: { type: 'note', note: 11, channel: 1 },
   turbo: { type: 'note', note: 12, channel: 1 },
   brake: { type: 'note', note: 11, channel: 1 },

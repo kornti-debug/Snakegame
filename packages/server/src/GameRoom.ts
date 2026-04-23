@@ -1,4 +1,4 @@
-import type { GameSnapshot, GamePhase, LobbyPlayer, Vector2D, BoardPreset } from '@snakegame/shared';
+import type { GameSnapshot, GamePhase, LobbyPlayer, Vector2D, BoardPreset, RoundEndReason } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS, MAX_PLAYERS, COST_POWERUP, COST_OBSTACLE, COST_HINT, REWARD_CORRECT_GUESS, BOID_REVEAL_RADIUS, BOARD_PRESETS, DEFAULT_BOARD_PRESET, cellToPixel, isValidCell } from '@snakegame/shared';
 import { Snake } from './entities/Snake.js';
 import { Obstacle } from './entities/Obstacle.js';
@@ -417,39 +417,6 @@ export class GameRoom {
       return;
     }
 
-    if (phaseChange === 'ended') {
-      const pairScores = this.memoryBoardSystem.getPairScores();
-      const revealScores = this.revealSystem.getRevealScores();
-      let winner: { id: string; name: string; score: number } | null = null;
-      let maxScore = -1;
-      const tiedAtTop: Snake[] = [];
-      for (const snake of snakes) {
-        const score = pairScores[snake.id] ?? 0;
-        if (score > maxScore) {
-          maxScore = score;
-          tiedAtTop.length = 0;
-          tiedAtTop.push(snake);
-        } else if (score === maxScore) {
-          tiedAtTop.push(snake);
-        }
-      }
-      if (tiedAtTop.length === 1) {
-        winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
-      } else if (tiedAtTop.length > 1) {
-        tiedAtTop.sort(
-          (a, b) => (revealScores[b.id] ?? 0) - (revealScores[a.id] ?? 0),
-        );
-        winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
-      }
-      this.pendingEvents.push({
-        type: 'round-end',
-        roundNumber: this.roundManager.roundNumber,
-        winner,
-        scores: revealScores,
-        pairScores,
-      });
-    }
-
     if (this.roundManager.phase === 'playing') {
       for (const [snakeId, timer] of this.respawnTimers) {
         const remaining = timer - dt;
@@ -521,9 +488,9 @@ export class GameRoom {
 
       // Decisive pair lead (cannot be caught) or board fully resolved
       if (this.memoryBoardSystem.getDecisiveWinnerSnakeId(snakes)) {
-        this.roundManager.forceEndRound();
+        this.forceEndRoundWithNotification('decisive-lead');
       } else if (this.memoryBoardSystem.isRoundComplete()) {
-        this.roundManager.forceEndRound();
+        this.forceEndRoundWithNotification('board-complete');
       }
 
       const dtMs = dt * 1000;
@@ -676,7 +643,51 @@ export class GameRoom {
       viewerName,
       word: '',
     });
+    this.forceEndRoundWithNotification('viewer-guess');
+  }
+
+  /** End the round if still in `playing`, then queue `round-end` for clients
+   *  (winner popup). Safe to call from API routes. */
+  forceEndRoundWithNotification(reason: RoundEndReason): void {
     this.roundManager.forceEndRound();
+    if (this.roundManager.phase === 'ended') {
+      this.pushRoundEndEvent(reason);
+    }
+  }
+
+  private pushRoundEndEvent(reason: RoundEndReason): void {
+    const snakes = this.getAllSnakes();
+    const pairScores = this.memoryBoardSystem.getPairScores();
+    const revealScores = this.revealSystem.getRevealScores();
+    let winner: { id: string; name: string; score: number } | null = null;
+    let maxScore = -1;
+    const tiedAtTop: Snake[] = [];
+    for (const snake of snakes) {
+      const score = pairScores[snake.id] ?? 0;
+      if (score > maxScore) {
+        maxScore = score;
+        tiedAtTop.length = 0;
+        tiedAtTop.push(snake);
+      } else if (score === maxScore) {
+        tiedAtTop.push(snake);
+      }
+    }
+    if (tiedAtTop.length === 1) {
+      winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
+    } else if (tiedAtTop.length > 1) {
+      tiedAtTop.sort(
+        (a, b) => (revealScores[b.id] ?? 0) - (revealScores[a.id] ?? 0),
+      );
+      winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
+    }
+    this.pendingEvents.push({
+      type: 'round-end',
+      roundNumber: this.roundManager.roundNumber,
+      winner,
+      scores: revealScores,
+      pairScores,
+      reason,
+    });
   }
 
   get snakeCount(): number {
@@ -697,7 +708,7 @@ export class GameRoom {
 
 export type GameEvent =
   | { type: 'round-start'; roundNumber: number; tiles: import('@snakegame/shared').MemoryTile[] }
-  | { type: 'round-end'; roundNumber: number; winner: { id: string; name: string; score: number } | null; scores: Record<string, number>; pairScores: Record<string, number> }
+  | { type: 'round-end'; roundNumber: number; winner: { id: string; name: string; score: number } | null; scores: Record<string, number>; pairScores: Record<string, number>; reason: RoundEndReason }
   | { type: 'tile-captured'; tileId: number; symbolName: string; capturedBy: string; capturedColor: string }
   | { type: 'pair-matched'; pairId: number; symbolName: string; matchedBy: string; matchedByColor: string }
   | { type: 'hint-active'; pairId: number; symbolName: string; tileIds: [number, number] }

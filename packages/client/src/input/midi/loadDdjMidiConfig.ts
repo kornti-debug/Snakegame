@@ -23,10 +23,31 @@ export type ResolvedDdjMidiConfig = {
   deck2: MidiMap;
 };
 
+function mergeTurn(
+  base: NonNullable<MidiMap['turn']>,
+  patch: NonNullable<MidiMap['turn']>,
+): MidiMap['turn'] {
+  if (base.type === 'cc-fader' && patch.type === 'cc-fader') {
+    return { ...base, ...patch };
+  }
+  if (base.type === 'cc-jog' && patch.type === 'cc-jog') {
+    return {
+      type: 'cc-jog',
+      controllers: patch.controllers ?? base.controllers,
+      controller: patch.controller ?? base.controller,
+      channel: patch.channel ?? base.channel,
+      analogEnergyCcs: patch.analogEnergyCcs ?? base.analogEnergyCcs,
+    };
+  }
+  return patch;
+}
+
 function mergeDeck(base: MidiMap, patch?: DdjMidiJsonDeck): MidiMap {
   if (!patch) return { ...base };
+  const turn =
+    patch.turn && base.turn ? mergeTurn(base.turn, patch.turn) : (patch.turn ?? base.turn);
   return {
-    turn: patch.turn ?? base.turn,
+    turn,
     activate: patch.activate ?? base.activate,
     turbo: patch.turbo ?? base.turbo,
     brake: patch.brake ?? base.brake,

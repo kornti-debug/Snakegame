@@ -1,12 +1,12 @@
 import type { RoundPhase, RoundState } from '@snakegame/shared';
-import { ROUND_WAIT_TIME, ROUND_END_DISPLAY_TIME } from '@snakegame/shared';
+import { TUNING } from './config/tuning.js';
 
 export class RoundManager {
   phase: RoundPhase = 'waiting';
   /** Upcoming round number during 'waiting', current round during 'playing',
    *  just-finished round during 'ended'. Starts at 1 for the first round. */
   roundNumber = 1;
-  timeRemainingMs = ROUND_WAIT_TIME;
+  timeRemainingMs = TUNING.round.waitTimeMs;
   private phaseJustChanged = false;
 
   update(dt: number): RoundPhase | null {
@@ -26,7 +26,7 @@ export class RoundManager {
       this.timeRemainingMs -= dtMs;
       if (this.timeRemainingMs <= 0) {
         this.phase = 'waiting';
-        this.timeRemainingMs = ROUND_WAIT_TIME;
+        this.timeRemainingMs = TUNING.round.waitTimeMs;
         this.roundNumber++;
         this.phaseJustChanged = true;
         return 'waiting';
@@ -47,7 +47,7 @@ export class RoundManager {
 
   endRound(): void {
     this.phase = 'ended';
-    this.timeRemainingMs = ROUND_END_DISPLAY_TIME;
+    this.timeRemainingMs = TUNING.round.endDisplayMs;
     this.phaseJustChanged = true;
   }
 
