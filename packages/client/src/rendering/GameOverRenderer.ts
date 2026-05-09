@@ -18,6 +18,8 @@ const REASON_SUBTITLE: Record<RoundEndReason, string> = {
   'board-complete': 'Every pair has been matched — round over!',
   'viewer-guess': 'Stream / audience guess ended the round.',
   'admin': 'Host or external control ended the round.',
+  'last-alive': 'Last snake standing wins!',
+  'timer': 'Timer expired — most boids eaten wins!',
 };
 
 /** End-of-game modal popup. Drawn as an overlay on top of whatever the
@@ -110,8 +112,12 @@ export class GameOverRenderer {
 
       ctx.font = 'bold 22px monospace';
       ctx.fillStyle = 'rgba(255, 215, 0, 0.95)';
-      const pairLabel = b.winner.score === 1 ? 'pair' : 'pairs';
-      ctx.fillText(`${b.winner.score} ${pairLabel} matched`, ARENA_WIDTH / 2, cardY + 368);
+      // Mode-specific scoring label — boid-battle counts boids, memory counts pairs.
+      const isBoidBattle = b.reason === 'last-alive' || b.reason === 'timer';
+      const label = isBoidBattle
+        ? `${b.winner.score} ${b.winner.score === 1 ? 'boid' : 'boids'} eaten`
+        : `${b.winner.score} ${b.winner.score === 1 ? 'pair' : 'pairs'} matched`;
+      ctx.fillText(label, ARENA_WIDTH / 2, cardY + 368);
     } else {
       ctx.font = 'bold 72px monospace';
       ctx.fillStyle = '#feca57';

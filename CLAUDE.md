@@ -1,7 +1,12 @@
 # CLAUDE.md
 
 ## Project Overview
-**Snake Memory** — a multiplayer Snake game (Slither.io style, smooth curves) crossed with a memory-match card game, for a university exhibition (CAMI / BCC4 @ FH St. Polten). Projected on wall, 2+ local players, Twitch audience interaction via Touch Designer bridge.
+**Snake Arcade** — a multiplayer Snake game (Slither.io style, smooth curves) for a university exhibition (CAMI / BCC4 @ FH St. Polten). Projected on a wall, played with phones / keyboard / DDJ-400 controller, Twitch audience interaction via Touch Designer bridge. Two modes shipped, more planned (see `docs/IDEAS.md`):
+
+- **Snake Memory** — reveal hidden tiles, capture pairs, most matches wins. Powerups, bonus pair → OP powerup, phone follow-cam.
+- **Boid Battle** — stripped DDJ-friendly 1v1. No tiles, no powerups. Eat AI boids by touching them with your snake's head. Last alive wins; 90s timer with most-eaten as tiebreaker. Min 2 players.
+
+Mode is picked in the main menu. `gameMode` flag on `GameRoom` gates which subsystems run (memory + powerups for Memory mode; just boid-eat for Boid Battle).
 
 ## Build & Run
 
@@ -40,14 +45,14 @@ npm run dev:client
 - Collision system (snake-vs-snake, snake-vs-wall, self-collision, snake-vs-obstacle, snake-vs-boid)
 - Ghost mode (pass through snakes/boids, semi-transparent rendering)
 - Auto-respawn after 2 seconds
-- **Mixed-input lobby**: any combination of phones + local inputs fills the 10 player slots. Local inputs are **opt-in** — each device self-registers the first time it's used, and auto-readies server-side (no "tap when ready" step for locals). Bindings: `wasd` (A/D turn, W powerup), `arrows` (◀/▶ turn, ▲ powerup), `gamepad-0` (left stick + A button), `midi-0` (DDJ-400 jog wheel + play/pause). Click the X on a lobby row to kick a slot; the device can re-register by being used again.
-- **MIDI controller** via `MidiProvider` (Web MIDI API). Default mapping for Pioneer DDJ-400: jog wheel = CC 34 ch 1, play/pause = note 11 ch 1. Jog wheel uses pulse-decay (turn state resets ~120ms after no new impulses). `?midi-debug=1` URL flag logs all incoming MIDI messages to the console for remapping. **Requires a secure origin** (localhost or HTTPS) — Web MIDI is gated by the Secure Contexts spec.
+- **Mixed-input lobby**: any combination of phones + local inputs fills the 10 player slots. Local inputs are **opt-in** — each device self-registers the first time it's used, and auto-readies server-side (no "tap when ready" step for locals). Bindings: `wasd` (A/D turn, W powerup), `arrows` (◀/▶ turn, ▲ powerup), `gamepad-0` (left stick + A button), `midi-deck1` / `midi-deck2` (DDJ-400 left/right decks as separate players). Click the X on a lobby row to kick a slot; the device can re-register by being used again.
+- **MIDI controller** via the `MidiHub` singleton + `MidiDeckProvider` lanes (Web MIDI API). See the DDJ-400 bullet below for the full subsystem. `?midi-debug` URL flag logs every incoming MIDI message. **Requires a secure origin** (localhost or HTTPS) — Web MIDI is gated by the Secure Contexts spec.
 - `input:activate` (edge-triggered, one-shot on rising edge) replaces `input:boost` across all local inputs and matches the phone's slot-card tap. `input:boost` is vestigial.
 - Canvas rendering with bezier curve snakes + eyes
 - 5-canvas layer stack (background tiles, reveal mask, tile overlay, game objects, UI)
 - **Memory card game** mechanic (configurable board: small 4×3/6 pairs → huge 7×6/20 pairs, 90% capture threshold, same-snake matching)
 - Per-snake per-tile reveal tracking with visual breakdown bars
-- Round management (waiting → playing → ended → repeat, 120s rounds)
+- Round management — **single-round** game. `RoundManager` cycles waiting → playing → ended → (returnToLobby instead of next round). Memory mode ends on board-complete or decisive-lead; Boid Battle ends on last-alive or 90s timer. Pre-round 'waiting' phase shown for `TUNING.round.waitTimeMs` (5s default).
 - Power-up system with **slot mechanic**: `PowerUpDefinition.kind` is `'active'` or `'passive'`. Actives (SpeedBoost, WideTrail, Ghost, Star, SwarmLeader, Predator) queue into `snake.itemSlot` on pickup — if the slot is already full, the powerup is **not** collected (stays on the field). Player taps the phone's slot overlay to fire `input:activate`, which cancels any currently-running active effect and starts the slotted one. Only one active effect per snake at a time. Passives (Growth, Steering, Speed+) apply instantly and stack per round; they feed into `snake.baseSpeed` / `baseTurnRate` / `baseRevealRadius` so actives that modify these stats multiply the passive-boosted baseline and restore it on expire. Projector draws a small glyph badge above each snake's head for the queued item; phone shows an icon in its slot card and per-passive pills in the top HUD bar.
 - **Bonus pair + OP powerups**: `MemoryPair.isBonus` marks one random pair per round (pulsing gold border + crown on its tiles). Matching it queues a random OP powerup into the matcher's slot — **overrides** any pending item (only exception to the no-overwrite rule). The three OP powerups (`spawnWeight: 0`, never on the field) target all OTHER living snakes: **Time Freeze** (3s, speed=0), **Lightning** (5s, half radius), **Cripple** (4s, 45% speed + 30% turn rate). `PowerUpDefinition.onApply/onExpire` now receive `(self, others)` so broadcast effects can reach every opponent.
 - **Pre-reveal**: during the 'waiting' phase (3s first round, `ROUND_WAIT_TIME` subsequent) both the projector and phone skip drawing the reveal mask, so players see all tiles + the bonus pair before the round starts.
@@ -58,7 +63,18 @@ npm run dev:client
 - Obstacle entity (for God Mode / external API)
 - Lobby/menu system — main menu + instructions screen + exit confirm dialog, ambient flocking boids behind menus
 - Board preset picker in lobby (small / medium / large / huge) via keys 1-4 or [ / ]
-- Title: **SNAKE MEMORY**
+- Title: **SNAKE ARCADE** with mode picker (Snake Memory · Boid Battle · Instructions)
+- **Boid Battle mode** — DDJ-friendly 1v1: no memory tiles, no powerups, no respawn. Snake heads consume boids on touch (`BoidSystem.consumeBoidsNearHead` returns the count, `Snake.boidsEaten` tracks it). Body-vs-boid is unchanged (still kills on head only since the boid collision check is head-only). Round ends when only one snake remains alive (`reason: 'last-alive'`) or after `BOID_BATTLE_DURATION_MS` (90s) elapses (`reason: 'timer'`, most-eaten wins). Min 2 players gate enforced both in lobby UI and in `GameRoom.startGame`.
+- **Mode gating** — `GameRoom.gameMode: 'memory' | 'ddj-duel' | 'boid-battle'` (`'ddj-duel'` is legacy/inert; menu only exposes Memory + Boid Battle now). In boid-battle the playing-phase update skips: powerup spawn/lifecycle, reveal system, memory-board update, decisive-lead / board-complete checks, respawn timers, and tile rendering on the client (`Renderer` early-outs the BackgroundLayer/RevealLayer/TileOverlayLayer draws).
+- **Audio** — BGM player (`BgmPlayer.ts`) loops the title soundtrack on menu screens and the in-game soundtrack during play, cross-fading 800ms on transitions. SFX engine (`SfxEngine.ts`) is fully procedural Web-Audio synthesis (no asset loading) — covers pickup / activate / match / bonus / death / freeze / lightning / cripple / round-start / round-end / menu-click / tile-capture / pair-neutralized. Both unlock on the first user gesture per the autoplay policy. User-supplied BGM lives in `packages/client/public/sounds/bgm/`; SFX folder exists with WhatsApp recordings staged but unused (procedural is good enough for now — see `docs/IDEAS.md`).
+- **Eat-boid particles** — `Particles.ts` runs lightweight color-matched bursts on the main ctx (between game and UI layers, so they ride the screen-shake transform). Triggered from a `boidEaten` snapshot-diff event in `SnapshotEvents.ts` (detects `Snake.boidsEaten` increases between snapshots).
+- **DDJ-400 MIDI input** (collaborator's branch, kept):
+  - `MidiHub.shared()` is a singleton owning the Web MIDI access. Multiple `MidiDeckProvider` lanes register against it — both decks always wired, regardless of mode. Each lane consumes its own subset of the channel/CC/note space.
+  - Jog wheel: pulse-rate intensity (50ms window), EMA smoothing, hysteresis around the 64 neutral value, scratch-stop release after 100ms of silence. Driven by `analogEnergyCcs` (CC 2) for extra "energy" pulses without direction.
+  - Default mapping (overridable in `packages/client/public/ddj-midi.json`): jog wheel = CCs 33/34/35; PLAY/PAUSE = note 11 → both `activate` AND `brake` (same physical button); CUE = note 12 → `turbo`. Channels 0/1 = decks 1/2.
+  - Server-side turbo/brake state machine on `Snake` (turbo = +75% speed, max 2s, then 400ms cooldown; brake = speed=0 for 500ms, 800ms cooldown). Tunable in `packages/server/config/tuning.json`.
+  - When both decks register in the lobby, the client auto-assigns the two players to opposing teams 0/1.
+- Single-round mode + game-over modal (`GameOverRenderer`): round-end always pops the modal (Restart / Main Menu) instead of looping into the next round. `gameOverPending` flag handles the case where the server returns to lobby on its 6s timer before the player clicks anything.
 - **Phone join via QR** (`/phone.html`). Phone has three screens: Join (name entry, portrait OK), Settings (in-lobby: name / color / team picker + Ready button, landscape), Controller (left/right pads + follow-cam canvas of the arena centered on the player's snake, landscape). Auto-switches between Settings ↔ Controller based on `gamePhase`. `MAX_PLAYERS` = 10.
 - **Phone reconnect resilience**: server holds dropped phones in a 10s grace window instead of evicting immediately. Phone persists a `clientId` in `localStorage['snakemem:clientId']`, includes it in `phone:join`, and emits `phone:reclaim({clientId})` on reconnect — if the slot is still in grace, the new socket is re-keyed to the existing lobby entry + live snake (score/position/color preserved). Snakes in grace render dimmed on the projector. `pingInterval: 10s` / `pingTimeout: 20s` on the socket.io server for faster drop detection. `createPhoneSocket()` uses an explicit `reconnection` config (500ms → 3s backoff, infinite attempts). Full-screen "Reconnecting…" overlay appears on the phone while the socket is down.
 - **Phone follow-cam**: `PhoneArenaRenderer` reuses the projector's `BackgroundLayer` / `RevealLayer` / `TileOverlayLayer` / `GameLayer` classes to composite a 1920×1080 arena buffer, then blits a camera-centered window to the visible canvas. Camera follows the phone's own snake (matched via `SnakeState.playerIndex`), clamped to arena bounds. Zoom is fixed at `CAMERA_VIEW_HEIGHT = 540` arena pixels tall; width derived from canvas aspect.
@@ -74,10 +90,10 @@ npm run dev:client
 
 ## What's Planned
 - Touch Designer integration testing
-- Visual polish — capture/match animations, death effects
-- Sound effects
-- Stream overlay data
 - Cloud deployment on the campus PaaS (single-instance — server serves client static + socket.io on one port over HTTPS)
+- Playtest Boid Battle with classmates → decide on shrinking-zone / BR layer (see `docs/IDEAS.md`)
+- Possible single-player / co-op mode reusing the reveal-as-digging mechanic (treasure-hunt style)
+- See `docs/IDEAS.md` for full parked-ideas list (sticky jog, second-button parity, BR zone, etc.)
 
 ## External API (Touch Designer)
 

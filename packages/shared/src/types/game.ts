@@ -34,6 +34,8 @@ export interface SnakeState {
   // snake keeps its place on the field but accepts no input; removed at
   // grace-expiry if the phone never reclaims.
   isDisconnected: boolean;
+  // Boids consumed in the current round (boid-battle mode). 0 in other modes.
+  boidsEaten: number;
 }
 
 export interface RevealDelta {
@@ -43,6 +45,12 @@ export interface RevealDelta {
 
 export type GamePhase = 'lobby' | 'ingame';
 export type RoundPhase = 'waiting' | 'playing' | 'ended';
+
+/** Game mode chosen in the main menu. Drives which subsystems are active.
+ *  - 'memory': original memory-card game with reveals + powerups + phones
+ *  - 'ddj-duel': memory game restricted to the DDJ controller
+ *  - 'boid-battle': stripped DDJ 1v1 — eat boids, last alive wins. No memory tiles, no powerups. */
+export type GameMode = 'memory' | 'ddj-duel' | 'boid-battle';
 
 export interface RoundState {
   phase: RoundPhase;
@@ -82,6 +90,7 @@ export interface GameSnapshot {
   tick: number;
   timestamp: number;
   gamePhase: GamePhase;
+  gameMode: GameMode;
   snakes: SnakeState[];
   arena: ArenaConfig;
   revealPercentage: number;

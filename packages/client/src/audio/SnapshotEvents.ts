@@ -10,7 +10,8 @@ export type SnapshotEvent =
   | { kind: 'crippled'; snakeId: string }
   | { kind: 'tileCaptured'; tileId: number; snakeId: string }
   | { kind: 'pairMatched'; pairId: number; isBonus: boolean; snakeId: string }
-  | { kind: 'pairNeutralized'; pairId: number };
+  | { kind: 'pairNeutralized'; pairId: number }
+  | { kind: 'boidEaten'; snakeId: string; count: number; x: number; y: number; color: string };
 
 /**
  * Diff two snapshots and emit a flat list of "things that just happened" we
@@ -48,6 +49,19 @@ function diffSnake(ps: SnakeState, ns: SnakeState, out: SnapshotEvent[]): void {
   if (!ps.frozen && ns.frozen) out.push({ kind: 'frozen', snakeId: ns.id });
   if (!ps.shrunken && ns.shrunken) out.push({ kind: 'shrunken', snakeId: ns.id });
   if (!ps.crippled && ns.crippled) out.push({ kind: 'crippled', snakeId: ns.id });
+
+  // Boid Battle: count went up = snake just ate one or more boids this tick.
+  // Emit at the snake head — the consumed boids were within head-radius.
+  if (ns.boidsEaten > ps.boidsEaten && ns.segments.length > 0) {
+    out.push({
+      kind: 'boidEaten',
+      snakeId: ns.id,
+      count: ns.boidsEaten - ps.boidsEaten,
+      x: ns.segments[0].x,
+      y: ns.segments[0].y,
+      color: ns.color,
+    });
+  }
 }
 
 function diffBoard(prev: GameSnapshot, next: GameSnapshot, out: SnapshotEvent[]): void {

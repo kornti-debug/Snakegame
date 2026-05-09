@@ -1,4 +1,4 @@
-import type { GameSnapshot, GamePhase, LobbyPlayer, Vector2D, BoardPreset, RoundEndReason } from '@snakegame/shared';
+import type { GameSnapshot, GamePhase, GameMode, LobbyPlayer, Vector2D, BoardPreset, RoundEndReason } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, PLAYER_COLORS, MAX_PLAYERS, COST_POWERUP, COST_OBSTACLE, COST_HINT, REWARD_CORRECT_GUESS, BOID_REVEAL_RADIUS, BOARD_PRESETS, DEFAULT_BOARD_PRESET, cellToPixel, isValidCell } from '@snakegame/shared';
 import { Snake } from './entities/Snake.js';
 import { Obstacle } from './entities/Obstacle.js';
@@ -41,6 +41,9 @@ export class GameRoom {
   // Board preset chosen in lobby (applied at round start)
   boardPreset: BoardPreset = DEFAULT_BOARD_PRESET;
 
+  // Game mode chosen in lobby. 'memory' is the default (legacy "play" entry).
+  gameMode: GameMode = 'memory';
+
   // Sockets that joined via phone QR — cannot pause/kick. Used to gate
   // host-only actions so only the projector (keyboard) client can control them.
   private phoneSockets = new Set<string>();
@@ -52,6 +55,11 @@ export class GameRoom {
   static readonly DISCONNECT_GRACE_MS = 10_000;
 
   paused = false;
+
+  /** Wall-clock countdown for boid-battle 'playing' phase. Memory modes
+   *  end via board-complete / decisive-lead and don't use this. */
+  private boidBattleTimeRemainingMs = 0;
+  static readonly BOID_BATTLE_DURATION_MS = 90_000;
 
   pendingEvents: GameEvent[] = [];
 
@@ -282,6 +290,8 @@ export class GameRoom {
 
   startGame(): void {
     if (this.lobbyPlayers.size === 0) return;
+    // Boid Battle is "last alive wins" — solo play is unwinnable.
+    if (this.gameMode === 'boid-battle' && this.lobbyPlayers.size < 2) return;
     // All joined players must be ready — the host UI already gates this,
     // but re-check here so a phone can't force-start by emitting directly.
     for (const p of this.lobbyPlayers.values()) {
@@ -334,6 +344,17 @@ export class GameRoom {
    *  rounds from the ended→waiting transition in update()). */
   private beginRoundSetup(snakes: Snake[]): void {
     this.resetForNewRound(snakes);
+    if (this.gameMode === 'boid-battle') {
+      // No tiles — no memory board. Start the wall-clock timer instead.
+      this.memoryBoardSystem.reset();
+      this.boidBattleTimeRemainingMs = GameRoom.BOID_BATTLE_DURATION_MS;
+      this.pendingEvents.push({
+        type: 'round-start',
+        roundNumber: this.roundManager.roundNumber,
+        tiles: [],
+      });
+      return;
+    }
     const symbols = this.customSymbols ?? getDefaultSymbols();
     this.memoryBoardSystem.setConfig(BOARD_PRESETS[this.boardPreset]);
     this.memoryBoardSystem.generateBoard(symbols);
@@ -418,17 +439,22 @@ export class GameRoom {
     }
 
     if (this.roundManager.phase === 'playing') {
-      for (const [snakeId, timer] of this.respawnTimers) {
-        const remaining = timer - dt;
-        if (remaining <= 0) {
-          const snake = snakes.find(s => s.id === snakeId);
-          if (snake) {
-            const { pos, angle } = this.getSpawnPoint();
-            snake.respawn(pos, angle);
+      const isBoidBattle = this.gameMode === 'boid-battle';
+
+      // Respawn handling — boid-battle is last-alive, no respawns.
+      if (!isBoidBattle) {
+        for (const [snakeId, timer] of this.respawnTimers) {
+          const remaining = timer - dt;
+          if (remaining <= 0) {
+            const snake = snakes.find(s => s.id === snakeId);
+            if (snake) {
+              const { pos, angle } = this.getSpawnPoint();
+              snake.respawn(pos, angle);
+            }
+            this.respawnTimers.delete(snakeId);
+          } else {
+            this.respawnTimers.set(snakeId, remaining);
           }
-          this.respawnTimers.delete(snakeId);
-        } else {
-          this.respawnTimers.set(snakeId, remaining);
         }
       }
 
@@ -440,57 +466,81 @@ export class GameRoom {
 
       this.movementSystem.update(snakes, dt);
       this.collisionSystem.update(snakes, this.obstacles);
-      this.powerUpSystem.update(snakes, dt);
+
+      if (!isBoidBattle) {
+        this.powerUpSystem.update(snakes, dt);
+      }
 
       // Boid AI swarm update
       this.boidSystem.update(dt, snakes);
 
-      // Boid-snake collision: boids kill snakes on touch (unless starred/ghosting)
-      for (const snake of snakes) {
-        if (this.boidSystem.checkSnakeBoidCollision(snake)) {
-          snake.kill();
+      if (isBoidBattle) {
+        // Eat-on-touch instead of kill. Body-vs-boid is unchanged (the
+        // collision check below is head-only either way).
+        for (const snake of snakes) {
+          if (!snake.alive) continue;
+          const ate = this.boidSystem.consumeBoidsNearHead(snake);
+          if (ate > 0) snake.boidsEaten += ate;
+        }
+      } else {
+        // Memory modes: boids kill snakes on touch (unless starred/ghosting).
+        for (const snake of snakes) {
+          if (this.boidSystem.checkSnakeBoidCollision(snake)) {
+            snake.kill();
+          }
         }
       }
 
-      // Reveal system: snake heads + boid reveals (all in one pass)
-      this.revealSystem.update(snakes);
+      if (!isBoidBattle) {
+        // Reveal system: snake heads + boid reveals (all in one pass)
+        this.revealSystem.update(snakes);
 
-      // Boid reveals: boids following a swarm leader reveal for that leader's team
-      for (const boid of this.boidSystem.getRevealableBoids()) {
-        if (boid.leaderId) {
-          this.revealSystem.revealAt(boid.x, boid.y, BOID_REVEAL_RADIUS, boid.leaderId);
+        // Boid reveals: boids following a swarm leader reveal for that leader's team
+        for (const boid of this.boidSystem.getRevealableBoids()) {
+          if (boid.leaderId) {
+            this.revealSystem.revealAt(boid.x, boid.y, BOID_REVEAL_RADIUS, boid.leaderId);
+          }
         }
-      }
 
-      // Memory board: process ALL reveals once (snake + boid), check captures/matches
-      this.memoryBoardSystem.update(this.revealSystem, snakes);
+        // Memory board: process ALL reveals once (snake + boid), check captures/matches
+        this.memoryBoardSystem.update(this.revealSystem, snakes);
 
-      // Convert memory board events to game events
-      for (const evt of this.memoryBoardSystem.flushEvents()) {
-        if (evt.type === 'tile-captured') {
-          this.pendingEvents.push({
-            type: 'tile-captured',
-            tileId: evt.tileId!,
-            symbolName: evt.symbolName,
-            capturedBy: evt.snakeId,
-            capturedColor: evt.snakeColor,
-          });
-        } else if (evt.type === 'pair-matched') {
-          this.pendingEvents.push({
-            type: 'pair-matched',
-            pairId: evt.pairId!,
-            symbolName: evt.symbolName,
-            matchedBy: evt.snakeId,
-            matchedByColor: evt.snakeColor,
-          });
+        // Convert memory board events to game events
+        for (const evt of this.memoryBoardSystem.flushEvents()) {
+          if (evt.type === 'tile-captured') {
+            this.pendingEvents.push({
+              type: 'tile-captured',
+              tileId: evt.tileId!,
+              symbolName: evt.symbolName,
+              capturedBy: evt.snakeId,
+              capturedColor: evt.snakeColor,
+            });
+          } else if (evt.type === 'pair-matched') {
+            this.pendingEvents.push({
+              type: 'pair-matched',
+              pairId: evt.pairId!,
+              symbolName: evt.symbolName,
+              matchedBy: evt.snakeId,
+              matchedByColor: evt.snakeColor,
+            });
+          }
         }
-      }
 
-      // Decisive pair lead (cannot be caught) or board fully resolved
-      if (this.memoryBoardSystem.getDecisiveWinnerSnakeId(snakes)) {
-        this.forceEndRoundWithNotification('decisive-lead');
-      } else if (this.memoryBoardSystem.isRoundComplete()) {
-        this.forceEndRoundWithNotification('board-complete');
+        // Decisive pair lead (cannot be caught) or board fully resolved
+        if (this.memoryBoardSystem.getDecisiveWinnerSnakeId(snakes)) {
+          this.forceEndRoundWithNotification('decisive-lead');
+        } else if (this.memoryBoardSystem.isRoundComplete()) {
+          this.forceEndRoundWithNotification('board-complete');
+        }
+      } else {
+        // Boid-battle win conditions: timer expired, or only one snake alive.
+        this.boidBattleTimeRemainingMs -= tickDtMs;
+        const aliveSnakes = snakes.filter(s => s.alive);
+        if (aliveSnakes.length <= 1 && snakes.length >= 2) {
+          this.forceEndRoundWithNotification('last-alive');
+        } else if (this.boidBattleTimeRemainingMs <= 0) {
+          this.forceEndRoundWithNotification('timer');
+        }
       }
 
       const dtMs = dt * 1000;
@@ -499,9 +549,12 @@ export class GameRoom {
       }
       this.obstacles = this.obstacles.filter(o => !o.isExpired());
 
-      for (const snake of snakes) {
-        if (!snake.alive && !this.respawnTimers.has(snake.id)) {
-          this.respawnTimers.set(snake.id, 2);
+      // Auto-respawn timers — memory modes only. Boid-battle is last-alive.
+      if (!isBoidBattle) {
+        for (const snake of snakes) {
+          if (!snake.alive && !this.respawnTimers.has(snake.id)) {
+            this.respawnTimers.set(snake.id, 2);
+          }
         }
       }
     }
@@ -544,6 +597,7 @@ export class GameRoom {
       tick: this.tick,
       timestamp: Date.now(),
       gamePhase: this.gamePhase,
+      gameMode: this.gameMode,
       snakes: snakes.map(s => s.toState()),
       arena: { width: ARENA_WIDTH, height: ARENA_HEIGHT },
       revealPercentage: this.revealSystem.getRevealPercentage(),
@@ -660,26 +714,55 @@ export class GameRoom {
     const pairScores = this.memoryBoardSystem.getPairScores();
     const revealScores = this.revealSystem.getRevealScores();
     let winner: { id: string; name: string; score: number } | null = null;
-    let maxScore = -1;
-    const tiedAtTop: Snake[] = [];
-    for (const snake of snakes) {
-      const score = pairScores[snake.id] ?? 0;
-      if (score > maxScore) {
-        maxScore = score;
-        tiedAtTop.length = 0;
-        tiedAtTop.push(snake);
-      } else if (score === maxScore) {
-        tiedAtTop.push(snake);
+
+    if (this.gameMode === 'boid-battle') {
+      // 'last-alive' → the surviving snake wins outright; eaten count is the
+      // displayed score. 'timer' → most boids eaten wins, with ties broken
+      // arbitrarily (first in list).
+      if (reason === 'last-alive') {
+        const survivor = snakes.find(s => s.alive);
+        if (survivor) {
+          winner = { id: survivor.id, name: survivor.name, score: survivor.boidsEaten };
+        }
+      } else {
+        let maxEaten = -1;
+        const tiedAtTop: Snake[] = [];
+        for (const snake of snakes) {
+          if (snake.boidsEaten > maxEaten) {
+            maxEaten = snake.boidsEaten;
+            tiedAtTop.length = 0;
+            tiedAtTop.push(snake);
+          } else if (snake.boidsEaten === maxEaten) {
+            tiedAtTop.push(snake);
+          }
+        }
+        if (tiedAtTop.length >= 1 && maxEaten > 0) {
+          winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxEaten };
+        }
+      }
+    } else {
+      let maxScore = -1;
+      const tiedAtTop: Snake[] = [];
+      for (const snake of snakes) {
+        const score = pairScores[snake.id] ?? 0;
+        if (score > maxScore) {
+          maxScore = score;
+          tiedAtTop.length = 0;
+          tiedAtTop.push(snake);
+        } else if (score === maxScore) {
+          tiedAtTop.push(snake);
+        }
+      }
+      if (tiedAtTop.length === 1) {
+        winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
+      } else if (tiedAtTop.length > 1) {
+        tiedAtTop.sort(
+          (a, b) => (revealScores[b.id] ?? 0) - (revealScores[a.id] ?? 0),
+        );
+        winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
       }
     }
-    if (tiedAtTop.length === 1) {
-      winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
-    } else if (tiedAtTop.length > 1) {
-      tiedAtTop.sort(
-        (a, b) => (revealScores[b.id] ?? 0) - (revealScores[a.id] ?? 0),
-      );
-      winner = { id: tiedAtTop[0].id, name: tiedAtTop[0].name, score: maxScore };
-    }
+
     this.pendingEvents.push({
       type: 'round-end',
       roundNumber: this.roundManager.roundNumber,

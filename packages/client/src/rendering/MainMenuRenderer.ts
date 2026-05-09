@@ -1,11 +1,11 @@
 import { ARENA_WIDTH, ARENA_HEIGHT } from '@snakegame/shared';
 import { BackgroundBoids } from './BackgroundBoids.js';
 
-export type MenuEntry = 'play' | 'ddj-duel' | 'instructions';
+export type MenuEntry = 'memory' | 'boid-battle' | 'instructions';
 
 const ENTRIES: { id: MenuEntry; label: string }[] = [
-  { id: 'play', label: 'PLAY' },
-  { id: 'ddj-duel', label: 'DDJ 1v1' },
+  { id: 'memory', label: 'SNAKE MEMORY' },
+  { id: 'boid-battle', label: 'BOID BATTLE' },
   { id: 'instructions', label: 'INSTRUCTIONS' },
 ];
 
@@ -50,13 +50,13 @@ export class MainMenuRenderer {
     ctx.fillStyle = '#fff';
     ctx.shadowColor = '#44aaff';
     ctx.shadowBlur = 30;
-    ctx.fillText('SNAKE MEMORY', 0, 0);
+    ctx.fillText('SNAKE ARCADE', 0, 0);
     ctx.shadowBlur = 0;
     ctx.restore();
 
     ctx.font = '26px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText('Reveal, capture, match the pairs', ARENA_WIDTH / 2, 340);
+    ctx.fillText('Pick a mode  ·  jog wheels, phones, or keys', ARENA_WIDTH / 2, 340);
 
     // Menu entries
     const startY = 480;

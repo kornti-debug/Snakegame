@@ -3,7 +3,7 @@ export type {
   GamePhase, RoundPhase, RoundState, PowerUpState, ObstacleState,
   LobbyPlayer, MemoryTile, MemoryPair, MemoryBoardState,
   TwitchViewer, HintState, BoidState,
-  BoardConfig, BoardPreset,
+  BoardConfig, BoardPreset, GameMode,
 } from './types/game.js';
 export type {
   ServerToClientEvents, ClientToServerEvents, InterServerEvents, SocketData, RoundEndReason,

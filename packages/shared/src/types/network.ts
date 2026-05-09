@@ -1,11 +1,13 @@
-import type { GameSnapshot, RevealDelta, MemoryTile, BoardPreset } from './game.js';
+import type { GameSnapshot, RevealDelta, MemoryTile, BoardPreset, GameMode } from './game.js';
 
 /** Why the memory round stopped — shown on the winner popup for clarity. */
 export type RoundEndReason =
   | 'decisive-lead'
   | 'board-complete'
   | 'viewer-guess'
-  | 'admin';
+  | 'admin'
+  | 'last-alive'
+  | 'timer';
 
 export interface ServerToClientEvents {
   'phone:joined': (payload: { playerIndex: number; color: string }) => void;
@@ -64,6 +66,7 @@ export interface ClientToServerEvents {
   'lobby:start-game': () => void;
   'lobby:return': () => void;
   'lobby:set-config': (payload: { preset: BoardPreset }) => void;
+  'lobby:set-game-mode': (mode: GameMode) => void;
   'lobby:kick': (slotIndex: number) => void;
   'game:set-paused': (paused: boolean) => void;
   'phone:join': (payload: { name?: string; clientId?: string }) => void;

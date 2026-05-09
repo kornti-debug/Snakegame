@@ -34,47 +34,46 @@ export class InstructionsRenderer {
     const rightX = ARENA_WIDTH / 2 + 40;
     const topY = 200;
 
-    this.drawSection(ctx, leftX, topY, colW, 'GOAL', [
+    this.drawSection(ctx, leftX, topY, colW, 'SNAKE MEMORY', [
       'Reveal hidden symbols on the board.',
       'Each symbol appears on TWO tiles.',
-      'Capture 80% of a tile to claim it.',
-      'Capture both tiles of a pair with the',
-      '  SAME snake → you match the pair.',
+      'Capture 80% of a tile to claim it,',
+      'then both tiles of a pair with the',
+      '  SAME snake to match it.',
       'Most matched pairs when the round',
-      'ends wins.',
+      'ends wins. Power-ups + bonus pair',
+      'spice things up.',
     ]);
 
-    this.drawSection(ctx, rightX, topY, colW, 'CONTROLS', [
-      'Players:  join by scanning the QR',
-      '          code in the lobby with',
-      '          your phone.',
-      '          Pick name, color, team on',
-      '          the phone. Tap-and-hold',
-      '          left / right to steer.',
-      'Host:     click presets / kick X.',
-      '          ENTER to start, ESC to',
-      '          pause or go back.',
+    this.drawSection(ctx, rightX, topY, colW, 'BOID BATTLE', [
+      'Two-player duel on the DDJ deck.',
+      'No tiles, no power-ups — just',
+      '  hunt the boids.',
+      'Eat boids by touching them with',
+      '  your head. Most eaten wins.',
+      'Last snake alive wins outright.',
+      '90 seconds. Whichever comes first.',
     ]);
 
-    this.drawSection(ctx, leftX, topY + 360, colW, 'POWER-UPS', [
-      '●  Speed Boost   — move faster',
-      '●  Wide Trail    — reveal wider area',
-      '●  Ghost         — pass through snakes',
-      '●  Star          — invincible, kills on touch',
-      '●  Swarm Leader  — boids follow you',
-      '●  Predator      — boids flee from you',
-      '●  Growth        — permanent wider trail',
+    this.drawSection(ctx, leftX, topY + 360, colW, 'CONTROLS', [
+      'Phone:    scan the lobby QR.',
+      '          Tap & hold L / R to steer.',
+      'DDJ-400:  spin jog to steer.',
+      '          PLAY = brake + activate.',
+      '          CUE  = turbo (held).',
+      'Keyboard: WASD or Arrows to steer.',
+      'Host:     ENTER start, ESC pause.',
     ]);
 
     this.drawSection(ctx, rightX, topY + 360, colW, 'THREATS', [
-      'Walls    — hit them and you die',
-      'Snakes   — colliding with another',
-      '           snake kills you',
-      'Boids    — small AI creatures',
-      '           touching them = death',
-      'Obstacles — placed by viewers',
-      'Tip: use Ghost / Star to survive',
-      '     heavy traffic zones',
+      'Walls   — hit them and you die.',
+      'Snakes  — colliding with another',
+      '          snake kills you.',
+      'Boids   — touching one kills you',
+      '          (Memory mode). In Boid',
+      '          Battle they are FOOD.',
+      'Tip:    use Ghost / Star to survive',
+      '          heavy traffic in Memory.',
     ]);
 
     // Footer

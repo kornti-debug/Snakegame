@@ -119,6 +119,13 @@ export class SocketManager {
         console.log(`[Lobby] Board preset set to ${preset}`);
       });
 
+      socket.on('lobby:set-game-mode', (mode) => {
+        if (this.room.gamePhase !== 'lobby') return;
+        if (mode !== 'memory' && mode !== 'ddj-duel' && mode !== 'boid-battle') return;
+        this.room.gameMode = mode;
+        console.log(`[Lobby] Game mode set to ${mode}`);
+      });
+
       socket.on('lobby:kick', (slotIndex) => {
         if (this.room.isPhoneSocket(socket.id)) return; // phones can't kick
         if (typeof slotIndex !== 'number') return;

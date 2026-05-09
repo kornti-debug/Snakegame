@@ -6,6 +6,7 @@ import { TileOverlayLayer } from './layers/TileOverlayLayer.js';
 import { GameLayer } from './layers/GameLayer.js';
 import { UILayer } from './layers/UILayer.js';
 import { ScreenShake } from './ScreenShake.js';
+import { Particles } from './Particles.js';
 
 export class Renderer {
   private canvas: HTMLCanvasElement;
@@ -18,6 +19,8 @@ export class Renderer {
   private uiLayer: UILayer;
 
   readonly shake = new ScreenShake();
+  readonly particles = new Particles();
+  private lastFrameMs = 0;
 
   constructor(container: HTMLElement, canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -69,27 +72,41 @@ export class Renderer {
       ctx.translate(-ARENA_WIDTH / 2, -ARENA_HEIGHT / 2);
     }
 
-    // Layer 1: Background (tile images)
-    ctx.drawImage(this.backgroundLayer.canvas, 0, 0);
+    const isBoidBattle = snapshot.gameMode === 'boid-battle';
+
+    // Layer 1: Background (tile images) — skipped in boid-battle (no tiles).
+    if (!isBoidBattle) {
+      ctx.drawImage(this.backgroundLayer.canvas, 0, 0);
+    }
 
     // Layer 2: Reveal mask (covers tiles, holes show through).
     // Skipped during the pre-round 'waiting' phase so players get a brief
     // look at all tile positions + the bonus pair before the round starts.
+    // Also skipped entirely in boid-battle (no memory game underneath).
     const preReveal = snapshot.round.phase === 'waiting';
-    if (!preReveal) {
+    if (!preReveal && !isBoidBattle) {
       ctx.drawImage(this.revealLayer.canvas, 0, 0);
     }
 
-    // Layer 3: Tile overlay (borders, capture states, hints)
-    // Update snake color cache from snapshot
-    const colorMap = new Map(snapshot.snakes.map(s => [s.id, s.color]));
-    this.tileOverlayLayer.setSnakeColors(colorMap);
-    this.tileOverlayLayer.render(snapshot.memoryBoard, snapshot.hints, preReveal);
-    ctx.drawImage(this.tileOverlayLayer.canvas, 0, 0);
+    // Layer 3: Tile overlay (borders, capture states, hints) — boid-battle skips.
+    if (!isBoidBattle) {
+      const colorMap = new Map(snapshot.snakes.map(s => [s.id, s.color]));
+      this.tileOverlayLayer.setSnakeColors(colorMap);
+      this.tileOverlayLayer.render(snapshot.memoryBoard, snapshot.hints, preReveal);
+      ctx.drawImage(this.tileOverlayLayer.canvas, 0, 0);
+    }
 
     // Layer 4: Game objects (snakes, powerups, obstacles)
     this.gameLayer.render(snapshot);
     ctx.drawImage(this.gameLayer.canvas, 0, 0);
+
+    // Layer 4.5: Particles (eat pops etc.) — drawn on the shaken main ctx so
+    // they ride the screen shake; below the UI so they don't paint over text.
+    const now = performance.now();
+    const dtMs = this.lastFrameMs === 0 ? 16 : Math.min(64, now - this.lastFrameMs);
+    this.lastFrameMs = now;
+    this.particles.update(dtMs);
+    this.particles.render(ctx);
 
     // Layer 5: UI (HUD, scores)
     this.uiLayer.render(snapshot);

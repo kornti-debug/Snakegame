@@ -272,6 +272,17 @@ export class BoidSystem {
     return false;
   }
 
+  /** Despawn every boid currently touching this snake's head. Returns the
+   *  count consumed (used by boid-battle mode for scoring). */
+  consumeBoidsNearHead(snake: Snake): number {
+    if (!snake.alive) return 0;
+    const head = snake.segments[0];
+    const reach = BOID_RADIUS + snake.radius;
+    const before = this.boids.length;
+    this.boids = this.boids.filter(b => dist(head, b) >= reach);
+    return before - this.boids.length;
+  }
+
   getRevealableBoids(): { x: number; y: number; leaderId: string | null }[] {
     return this.boids.map(b => ({ x: b.x, y: b.y, leaderId: b.leaderId }));
   }

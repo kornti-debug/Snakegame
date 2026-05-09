@@ -24,29 +24,36 @@ export class UILayer {
     ctx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
     const { round } = snapshot;
+    const isBoidBattle = snapshot.gameMode === 'boid-battle';
 
-    this.drawRoundInfo(ctx, round.phase, round.roundNumber);
+    this.drawRoundInfo(ctx, round.phase, round.roundNumber, isBoidBattle);
 
-    // Player scores — pair-based (top-left)
-    this.drawScores(ctx, snapshot);
+    // Player scores (top-left). In boid-battle, show boidsEaten instead.
+    if (isBoidBattle) {
+      this.drawBoidBattleScores(ctx, snapshot);
+    } else {
+      this.drawScores(ctx, snapshot);
+    }
 
-    const pairs = snapshot.memoryBoard.pairs;
-    const totalPairs = pairs.length;
-    const matchedCount = pairs.filter(p => p.matched).length;
-    const neutralCount = pairs.filter(p => p.neutralized).length;
-    const pending = pairs.filter(p => !p.matched && !p.neutralized).length;
-    ctx.font = 'bold 20px monospace';
-    ctx.textAlign = 'right';
-    this.textWithShadow(
-      ctx,
-      `Pairs: ${matchedCount} won · ${neutralCount} split · ${pending} open / ${totalPairs}`,
-      ARENA_WIDTH - 20,
-      34,
-      '#FFD700',
-    );
+    if (!isBoidBattle) {
+      const pairs = snapshot.memoryBoard.pairs;
+      const totalPairs = pairs.length;
+      const matchedCount = pairs.filter(p => p.matched).length;
+      const neutralCount = pairs.filter(p => p.neutralized).length;
+      const pending = pairs.filter(p => !p.matched && !p.neutralized).length;
+      ctx.font = 'bold 20px monospace';
+      ctx.textAlign = 'right';
+      this.textWithShadow(
+        ctx,
+        `Pairs: ${matchedCount} won · ${neutralCount} split · ${pending} open / ${totalPairs}`,
+        ARENA_WIDTH - 20,
+        34,
+        '#FFD700',
+      );
+    }
 
-    // Powerup legend (bottom-right)
-    if (round.phase === 'playing') {
+    // Powerup legend (bottom-right) — memory modes only.
+    if (round.phase === 'playing' && !isBoidBattle) {
       this.drawPowerUpLegend(ctx);
     }
 
@@ -65,15 +72,32 @@ export class UILayer {
     }
   }
 
-  private drawRoundInfo(ctx: CanvasRenderingContext2D, phase: string, _roundNum: number): void {
+  private drawRoundInfo(ctx: CanvasRenderingContext2D, phase: string, _roundNum: number, isBoidBattle: boolean): void {
     ctx.textAlign = 'center';
 
     if (phase === 'playing') {
       ctx.font = 'bold 26px monospace';
-      this.textWithShadow(ctx, `Win on pairs!`, ARENA_WIDTH / 2, 38, '#fff');
+      const msg = isBoidBattle ? `Eat the boids — last alive wins!` : `Win on pairs!`;
+      this.textWithShadow(ctx, msg, ARENA_WIDTH / 2, 38, '#fff');
     } else if (phase === 'ended') {
       ctx.font = 'bold 28px monospace';
       this.textWithShadow(ctx, `Game over`, ARENA_WIDTH / 2, 38, '#feca57');
+    }
+  }
+
+  private drawBoidBattleScores(ctx: CanvasRenderingContext2D, snapshot: GameSnapshot): void {
+    ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'left';
+    const sorted = [...snapshot.snakes].sort((a, b) => b.boidsEaten - a.boidsEaten);
+    let y = 70;
+    for (const snake of sorted) {
+      const status = snake.alive ? '' : '  [DEAD]';
+      this.textWithShadow(
+        ctx,
+        `${snake.name}: ${snake.boidsEaten} eaten${status}`,
+        20, y, snake.color,
+      );
+      y += 28;
     }
   }
 

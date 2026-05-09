@@ -25,6 +25,8 @@ export class Snake {
   score: number;
   revealScore: number;
   pairScore: number;
+  /** Boids consumed in the current round (boid-battle mode). */
+  boidsEaten = 0;
   revealRadius: number;
   ghosting: boolean;
   starred: boolean;
@@ -283,6 +285,7 @@ export class Snake {
       passiveStacks: this.passiveStacks,
       effectDrain: this.effectDrain,
       isDisconnected: this.isDisconnected,
+      boidsEaten: this.boidsEaten,
     };
   }
 
@@ -305,6 +308,7 @@ export class Snake {
   resetForRound(): void {
     this.revealScore = 0;
     this.pairScore = 0;
+    this.boidsEaten = 0;
     this.passiveStacks = {};
     this.recomputeBase();
     this.revealRadius = this.baseRevealRadius;

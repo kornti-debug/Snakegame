@@ -58,7 +58,7 @@ export class LobbyRenderer {
     return null;
   }
 
-  render(players: LobbyPlayer[], boardPreset: BoardPreset = 'medium', ddjDuelMode = false): void {
+  render(players: LobbyPlayer[], boardPreset: BoardPreset = 'medium', ddjDuelMode = false, minPlayers = 1): void {
     const ctx = this.ctx;
     this.pulseTime += 0.03;
     this.hitZones = [];
@@ -86,12 +86,13 @@ export class LobbyRenderer {
 
     ctx.font = '20px monospace';
     ctx.fillStyle = '#b8c4d4';
-    ctx.fillText('Snake Memory  ·  scan QR to join, pick a board', ARENA_WIDTH / 2, 130);
-    if (ddjDuelMode) {
-      ctx.font = '17px monospace';
-      ctx.fillStyle = '#ffcc88';
-      ctx.fillText('DDJ 1v1: spin LEFT deck to join slot 1, RIGHT deck for slot 2  ·  phones can still join', ARENA_WIDTH / 2, 158);
-    }
+    const subtitle = ddjDuelMode
+      ? 'Boid Battle  ·  spin a DDJ deck to join'
+      : 'Snake Memory  ·  scan QR to join, pick a board';
+    ctx.fillText(subtitle, ARENA_WIDTH / 2, 130);
+    ctx.font = '17px monospace';
+    ctx.fillStyle = '#ffcc88';
+    ctx.fillText('DDJ-400: spin LEFT deck for player 1, RIGHT deck for player 2  ·  keyboard / phones also work', ARENA_WIDTH / 2, 158);
 
     // Left: player list
     this.drawPlayerList(ctx, LIST_X, SECTION_TOP, LIST_W, players);
@@ -102,8 +103,8 @@ export class LobbyRenderer {
     this.drawPresetGrid(ctx, RIGHT_X, SECTION_TOP + qrCardH + 18, RIGHT_W, 340, boardPreset);
 
     // Footer: start button — only enabled when all joined players are ready.
-    const allReady = players.length >= 1 && players.every(p => p.ready);
-    this.drawStartButton(ctx, allReady, players.length);
+    const allReady = players.length >= minPlayers && players.every(p => p.ready);
+    this.drawStartButton(ctx, allReady, players.length, minPlayers);
 
     ctx.font = '13px monospace';
     ctx.fillStyle = '#6a7588';
@@ -439,7 +440,7 @@ export class LobbyRenderer {
 
   // --- Start button ---
 
-  private drawStartButton(ctx: CanvasRenderingContext2D, enabled: boolean, playerCount: number): void {
+  private drawStartButton(ctx: CanvasRenderingContext2D, enabled: boolean, playerCount: number, minPlayers = 1): void {
     const w = 380, h = 64;
     const x = (ARENA_WIDTH - w) / 2;
     const y = ARENA_HEIGHT - 120;
@@ -463,6 +464,7 @@ export class LobbyRenderer {
 
     let label: string;
     if (playerCount === 0) label = 'WAITING FOR PLAYERS…';
+    else if (playerCount < minPlayers) label = `NEED ${minPlayers - playerCount} MORE PLAYER${minPlayers - playerCount === 1 ? '' : 'S'}…`;
     else if (!enabled) label = 'WAITING FOR ALL READY…';
     else label = 'START GAME';
     ctx.fillText(label, x + w / 2, y + h / 2);

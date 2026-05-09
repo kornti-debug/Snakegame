@@ -10,15 +10,33 @@ import { BackgroundBoids } from './rendering/BackgroundBoids.js';
 import { QrCache } from './rendering/QrCache.js';
 import { KeyboardProvider } from './input/KeyboardProvider.js';
 import { GamepadProvider } from './input/GamepadProvider.js';
-import { MidiProvider } from './input/MidiProvider.js';
 import { MidiHub } from './input/midi/MidiHub.js';
 import { MidiDeckProvider } from './input/midi/MidiDeckProvider.js';
 import { loadDdjMidiConfig, type ResolvedDdjMidiConfig } from './input/midi/loadDdjMidiConfig.js';
 import type { InputProvider } from './input/InputProvider.js';
-import type { GameSnapshot, BoardPreset, RoundEndReason } from '@snakegame/shared';
+import type { GameSnapshot, BoardPreset, GameMode, RoundEndReason } from '@snakegame/shared';
 import { ARENA_WIDTH, ARENA_HEIGHT, DEFAULT_BOARD_PRESET } from '@snakegame/shared';
 import { sfx } from './audio/SfxEngine.js';
+import { bgm } from './audio/BgmPlayer.js';
 import { diffSnapshots, type SnapshotEvent } from './audio/SnapshotEvents.js';
+
+const BGM_TITLE = '/sounds/bgm/title-screen.mp3';
+const BGM_INGAME = '/sounds/bgm/snake-memory-soundtrack.mp3';
+
+function bgmForScreen(screen: ClientScreen): string | null {
+  switch (screen) {
+    case 'main-menu':
+    case 'instructions':
+    case 'lobby':
+      return BGM_TITLE;
+    case 'ingame':
+    case 'exit-confirm':
+    case 'game-over':
+      return BGM_INGAME;
+    default:
+      return null;
+  }
+}
 
 const container = document.getElementById('game')!;
 
@@ -66,6 +84,7 @@ let lastIngameSnapshot: GameSnapshot | null = null;
 function unlockAudioOnGesture(): void {
   const handler = () => {
     sfx.unlock();
+    bgm.unlock();
     window.removeEventListener('keydown', handler);
     window.removeEventListener('pointerdown', handler);
     window.removeEventListener('touchstart', handler);
@@ -80,7 +99,6 @@ type Binding =
   | 'wasd'
   | 'arrows'
   | 'gamepad-0'
-  | 'midi-0'
   | 'midi-deck1'
   | 'midi-deck2';
 
@@ -100,7 +118,8 @@ type LocalSlot = {
 
 let midiRuntime: ResolvedDdjMidiConfig;
 let slots: Partial<Record<Binding, LocalSlot>> = {};
-let duelFromMenu = false;
+/** Active mode for this lobby session. */
+let activeMode: GameMode = 'memory';
 /** Prevents duplicate player:set-team emits for the same pair of indices. */
 let duelTeamPairKey: string | null = null;
 
@@ -121,7 +140,7 @@ function applyMidiLaneMapsToHub(): void {
   const hub = MidiHub.shared();
   for (const slot of Object.values(slots)) {
     if (!slot || !(slot.provider instanceof MidiDeckProvider)) continue;
-    if (slot.binding === 'midi-0' || slot.binding === 'midi-deck1') {
+    if (slot.binding === 'midi-deck1') {
       hub.setLaneMap(slot.provider.laneId, midiRuntime.deck1);
     } else if (slot.binding === 'midi-deck2') {
       hub.setLaneMap(slot.provider.laneId, midiRuntime.deck2);
@@ -142,16 +161,10 @@ function makeSlot(binding: Binding, name: string, provider: InputProvider): Loca
   };
 }
 
-function buildNormalSlots(): Partial<Record<Binding, LocalSlot>> {
-  return {
-    wasd: makeSlot('wasd', 'Keyboard WASD', new KeyboardProvider('wasd')),
-    arrows: makeSlot('arrows', 'Keyboard Arrows', new KeyboardProvider('arrows')),
-    'gamepad-0': makeSlot('gamepad-0', 'Gamepad', new GamepadProvider(0)),
-    'midi-0': makeSlot('midi-0', 'DDJ-400', new MidiProvider(midiRuntime.deck1)),
-  };
-}
-
-function buildDuelSlots(): Partial<Record<Binding, LocalSlot>> {
+/** Build all input slots: keyboard, gamepad, both DDJ decks as separate lanes,
+ *  plus phones via QR. The same slot set serves every mode — DDJ players
+ *  just don't show up until someone touches a deck. */
+function buildSlots(): Partial<Record<Binding, LocalSlot>> {
   const hub = MidiHub.shared();
   const lane1 = hub.addLane(midiRuntime.deck1);
   const lane2 = hub.addLane(midiRuntime.deck2);
@@ -172,16 +185,18 @@ function buildDuelSlots(): Partial<Record<Binding, LocalSlot>> {
   };
 }
 
-function enterLobby(fromDuel: boolean): void {
+function enterLobby(mode: GameMode): void {
   disposeAllSlots(slots);
   duelTeamPairKey = null;
-  duelFromMenu = fromDuel;
-  slots = fromDuel ? buildDuelSlots() : buildNormalSlots();
+  activeMode = mode;
+  slots = buildSlots();
+  socket.emit('lobby:set-game-mode', mode);
   setScreen('lobby');
 }
 
 function tryAssignDuelTeams(): void {
-  if (!duelFromMenu) return;
+  // Whenever both DDJ decks register, auto-assign opposing teams. Runs in
+  // every mode — having two decks plugged in always means 2 separate players.
   const d1 = slots['midi-deck1'];
   const d2 = slots['midi-deck2'];
   if (!d1 || !d2 || d1.state !== 'registered' || d2.state !== 'registered') return;
@@ -209,6 +224,8 @@ function setScreen(next: ClientScreen): void {
   if (next === clientScreen) return;
   if (next === 'main-menu') bgBoids.reset();
   clientScreen = next;
+  const track = bgmForScreen(next);
+  if (track) bgm.play(track);
 }
 
 function doRestart(): void {
@@ -219,7 +236,7 @@ function doRestart(): void {
   // the ingame-snapshot handler below could yank us back to the ingame
   // screen. Safe no-op if the server has already returned.
   socket.emit('lobby:return');
-  enterLobby(duelFromMenu);
+  enterLobby(activeMode);
 }
 
 function doMainMenuFromGameOver(): void {
@@ -227,9 +244,9 @@ function doMainMenuFromGameOver(): void {
   gameOverPending = false;
   socket.emit('lobby:return');
   disposeAllSlots(slots);
-  duelFromMenu = false;
+  activeMode = 'memory';
   duelTeamPairKey = null;
-  slots = buildNormalSlots();
+  slots = buildSlots();
   setScreen('main-menu');
 }
 
@@ -251,9 +268,9 @@ window.addEventListener('keydown', (e) => {
       socket.emit('game:set-paused', false);
       socket.emit('lobby:return');
       disposeAllSlots(slots);
-      duelFromMenu = false;
+      activeMode = 'memory';
       duelTeamPairKey = null;
-      slots = buildNormalSlots();
+      slots = buildSlots();
       setScreen('main-menu');
     } else if (e.code === 'KeyR' || e.code === 'KeyN' || e.code === 'Escape') {
       socket.emit('game:set-paused', false);
@@ -272,8 +289,8 @@ window.addEventListener('keydown', (e) => {
     } else if (e.code === 'Enter') {
       const sel = mainMenuRenderer.selected;
       sfx.menuClick();
-      if (sel === 'play') enterLobby(false);
-      else if (sel === 'ddj-duel') enterLobby(true);
+      if (sel === 'memory') enterLobby('memory');
+      else if (sel === 'boid-battle') enterLobby('boid-battle');
       else if (sel === 'instructions') setScreen('instructions');
     }
     return;
@@ -287,15 +304,16 @@ window.addEventListener('keydown', (e) => {
   if (clientScreen === 'lobby') {
     if (e.code === 'Escape') {
       disposeAllSlots(slots);
-      duelFromMenu = false;
+      activeMode = 'memory';
       duelTeamPairKey = null;
-      slots = buildNormalSlots();
+      slots = buildSlots();
       setScreen('main-menu');
       return;
     }
     if (e.code === 'Enter') {
       const players = latestSnapshot?.lobbyPlayers ?? [];
-      if (players.length >= 1 && players.every(p => p.ready)) {
+      const minPlayers = activeMode === 'boid-battle' ? 2 : 1;
+      if (players.length >= minPlayers && players.every(p => p.ready)) {
         socket.emit('lobby:start-game');
       }
       return;
@@ -354,7 +372,8 @@ mainCanvas.addEventListener('click', (e) => {
     socket.emit('lobby:kick', action.slot);
   } else if (action.type === 'start') {
     const players = latestSnapshot?.lobbyPlayers ?? [];
-    if (players.length >= 1 && players.every(p => p.ready)) {
+    const minPlayers = activeMode === 'boid-battle' ? 2 : 1;
+    if (players.length >= minPlayers && players.every(p => p.ready)) {
       socket.emit('lobby:start-game');
     }
   }
@@ -446,9 +465,9 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
         setScreen('game-over');
       } else {
         disposeAllSlots(slots);
-        duelFromMenu = false;
+        activeMode = 'memory';
         duelTeamPairKey = null;
-        slots = buildNormalSlots();
+        slots = buildSlots();
         setScreen('main-menu');
       }
     }
@@ -468,7 +487,7 @@ socket.on('game:snapshot', (snapshot: GameSnapshot) => {
     }
   }
 
-  if (duelFromMenu) {
+  {
     const d1 = slots['midi-deck1'];
     const d2 = slots['midi-deck2'];
     const both =
@@ -574,6 +593,12 @@ function handleSnapshotEvent(ev: SnapshotEvent): void {
       sfx.neutralized();
       renderer.shake.add(0.18);
       break;
+    case 'boidEaten':
+      // Particle burst at the head; modest shake on multi-eat for emphasis.
+      renderer.particles.burst(ev.x, ev.y, ev.color, 5 + Math.min(8, ev.count * 2));
+      sfx.pickup();
+      if (ev.count >= 2) renderer.shake.add(0.08);
+      break;
   }
 }
 
@@ -633,7 +658,8 @@ function gameLoop(): void {
     instructionsRenderer.render();
   } else if (clientScreen === 'lobby') {
     const lobbyPlayers = latestSnapshot?.lobbyPlayers ?? [];
-    lobbyRenderer.render(lobbyPlayers, boardPreset, duelFromMenu);
+    const minPlayers = activeMode === 'boid-battle' ? 2 : 1;
+    lobbyRenderer.render(lobbyPlayers, boardPreset, activeMode === 'boid-battle', minPlayers);
   } else if (clientScreen === 'game-over') {
     // Draw the frozen final game frame behind the popup so the scoreboard
     // + snake positions stay visible under the modal.
@@ -653,8 +679,10 @@ function gameLoop(): void {
 async function bootstrap(): Promise<void> {
   midiRuntime = await loadDdjMidiConfig();
   applyMidiHubRuntime(midiRuntime);
-  slots = buildNormalSlots();
+  slots = buildSlots();
   applyMidiLaneMapsToHub();
+  // Queue title music — actual playback waits for the user-gesture unlock.
+  bgm.play(BGM_TITLE);
   socket.connect();
   requestAnimationFrame(gameLoop);
 }
