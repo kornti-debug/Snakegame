@@ -1,6 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-
 export class ImageManager {
   currentImageUrl: string | null = null;
   currentWord: string | null = null;
@@ -8,27 +5,17 @@ export class ImageManager {
   private nextImageUrl: string | null = null;
   private nextWord: string | null = null;
 
-  // Directory for storing uploaded images
-  private uploadDir: string;
-
-  constructor(uploadDir: string) {
-    this.uploadDir = uploadDir;
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-  }
+  // The Node host supplies disk storage; the browser keeps images in memory.
+  constructor(private saveImage?: (base64: string) => string) {}
 
   /** Queue an image for the next round (URL or base64) */
   setNextImage(imageUrl: string | null, word: string, imageBase64?: string): string {
     this.nextWord = word;
 
     if (imageBase64) {
-      // Save base64 image to disk and serve locally
-      const filename = `round-${Date.now()}.png`;
-      const filepath = path.join(this.uploadDir, filename);
-      const buffer = Buffer.from(imageBase64, 'base64');
-      fs.writeFileSync(filepath, buffer);
-      this.nextImageUrl = `/uploads/${filename}`;
+      this.nextImageUrl = this.saveImage
+        ? this.saveImage(imageBase64)
+        : `data:image/png;base64,${imageBase64}`;
     } else if (imageUrl) {
       this.nextImageUrl = imageUrl;
     }

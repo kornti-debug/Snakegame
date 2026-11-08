@@ -19,9 +19,10 @@ import { ARENA_WIDTH, ARENA_HEIGHT, DEFAULT_BOARD_PRESET } from '@snakegame/shar
 import { sfx } from './audio/SfxEngine.js';
 import { bgm } from './audio/BgmPlayer.js';
 import { diffSnapshots, type SnapshotEvent } from './audio/SnapshotEvents.js';
+import { LOCAL_GAME, assetUrl } from './environment.js';
 
-const BGM_TITLE = '/sounds/bgm/title-screen.mp3';
-const BGM_INGAME = '/sounds/bgm/snake-memory-soundtrack.mp3';
+const BGM_TITLE = assetUrl('sounds/bgm/title-screen.mp3');
+const BGM_INGAME = assetUrl('sounds/bgm/snake-memory-soundtrack.mp3');
 
 function bgmForScreen(screen: ClientScreen): string | null {
   switch (screen) {
@@ -52,11 +53,11 @@ container.appendChild(mainCanvas);
 
 const renderer = new Renderer(container, mainCanvas);
 const bgBoids = new BackgroundBoids();
-const phoneUrl = `${window.location.origin}/phone.html`;
-const qrCache = new QrCache(phoneUrl);
-const lobbyRenderer = new LobbyRenderer(mainCanvas, bgBoids, qrCache);
-const mainMenuRenderer = new MainMenuRenderer(mainCanvas, bgBoids);
-const instructionsRenderer = new InstructionsRenderer(mainCanvas);
+const phoneUrl = new URL(assetUrl('phone.html'), window.location.origin).href;
+const qrCache = LOCAL_GAME ? undefined : new QrCache(phoneUrl);
+const lobbyRenderer = new LobbyRenderer(mainCanvas, bgBoids, qrCache, LOCAL_GAME);
+const mainMenuRenderer = new MainMenuRenderer(mainCanvas, bgBoids, LOCAL_GAME);
+const instructionsRenderer = new InstructionsRenderer(mainCanvas, LOCAL_GAME);
 const confirmRenderer = new ConfirmDialogRenderer(mainCanvas);
 const gameOverRenderer = new GameOverRenderer(mainCanvas);
 const buffer = new InterpolationBuffer();
@@ -393,7 +394,7 @@ mainCanvas.addEventListener('mousemove', (e) => {
 });
 
 socket.on('connect', () => {
-  console.log('[Client] Connected to server');
+  console.log(LOCAL_GAME ? '[Client] Browser game ready' : '[Client] Connected to server');
 });
 
 socket.on('host:joined', ({ playerIndex, binding }) => {

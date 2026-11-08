@@ -7,6 +7,7 @@ export type {
 } from './types/game.js';
 export type {
   ServerToClientEvents, ClientToServerEvents, InterServerEvents, SocketData, RoundEndReason,
+  GameClient, GameClientEvents,
 } from './types/network.js';
 export type { InputState } from './types/input.js';
 

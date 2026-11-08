@@ -79,3 +79,19 @@ export interface InterServerEvents {}
 export interface SocketData {
   playerIds: string[];
 }
+
+export interface GameClientEvents extends ServerToClientEvents {
+  connect: () => void;
+  disconnect: (reason: string) => void;
+  connect_error: (error: Error) => void;
+}
+
+/** Transport used by both the network game and the browser-only game. */
+export interface GameClient {
+  readonly id: string | undefined;
+  readonly connected: boolean;
+  on<E extends keyof GameClientEvents>(event: E, listener: GameClientEvents[E]): this;
+  emit<E extends keyof ClientToServerEvents>(event: E, ...args: Parameters<ClientToServerEvents[E]>): this;
+  connect(): this;
+  disconnect(): this;
+}

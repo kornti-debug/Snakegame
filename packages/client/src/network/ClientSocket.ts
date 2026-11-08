@@ -1,13 +1,14 @@
 import { io, Socket } from 'socket.io-client';
-import type { ServerToClientEvents, ClientToServerEvents } from '@snakegame/shared';
+import { LocalGameClient } from '@snakegame/server/browser';
+import { LOCAL_GAME } from '../environment.js';
+import type { ServerToClientEvents, ClientToServerEvents, GameClient } from '@snakegame/shared';
 
 export type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-/** Socket for the projector/host client. Uses the default origin so the
- *  Vite dev proxy (localhost:5173 → localhost:3000) works in development.
- *  The projector is always on the same machine as the server, so a tiny
- *  proxy hop is fine. */
-export function createSocket(): TypedSocket {
+/** Pages uses a local simulation. The network build connects same-origin,
+ *  through Vite's proxy in development or to the Node host in production. */
+export function createSocket(): GameClient {
+  if (LOCAL_GAME) return new LocalGameClient(__GAME_TUNING__);
   const socket: TypedSocket = io({
     autoConnect: false,
     reconnection: true,
@@ -17,7 +18,9 @@ export function createSocket(): TypedSocket {
     randomizationFactor: 0.5,
     timeout: 10_000,
   });
-  return socket;
+  // Socket.IO models reserved events with conditional types; the exposed
+  // methods and event payloads are the same as our transport interface.
+  return socket as unknown as GameClient;
 }
 
 /** Socket for the phone controller. Connects same-origin (the same port

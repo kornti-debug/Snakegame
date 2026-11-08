@@ -16,7 +16,7 @@ export class MainMenuRenderer {
   private selection = 0;
   private boids: BackgroundBoids;
 
-  constructor(canvas: HTMLCanvasElement, boids?: BackgroundBoids) {
+  constructor(canvas: HTMLCanvasElement, boids?: BackgroundBoids, private localGame = false) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.boids = boids ?? new BackgroundBoids();
@@ -56,7 +56,7 @@ export class MainMenuRenderer {
 
     ctx.font = '26px monospace';
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText('Pick a mode  ·  jog wheels, phones, or keys', ARENA_WIDTH / 2, 340);
+    ctx.fillText(this.localGame ? 'Play locally  ·  keyboard, gamepad, or jog wheels' : 'Pick a mode  ·  jog wheels, phones, or keys', ARENA_WIDTH / 2, 340);
 
     // Menu entries
     const startY = 480;

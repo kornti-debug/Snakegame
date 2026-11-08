@@ -68,7 +68,7 @@ const DEFAULT_CONFIG: ResolvedDdjMidiConfig = {
  */
 export async function loadDdjMidiConfig(): Promise<ResolvedDdjMidiConfig> {
   try {
-    const res = await fetch('/ddj-midi.json', { cache: 'no-store' });
+    const res = await fetch(`${import.meta.env.BASE_URL}ddj-midi.json`, { cache: 'no-store' });
     if (!res.ok) return { ...DEFAULT_CONFIG, deck1: { ...DEFAULT_CONFIG.deck1 }, deck2: { ...DEFAULT_CONFIG.deck2 } };
     const raw = (await res.json()) as DdjMidiJsonFile;
     const d0 = raw.decks?.[0];

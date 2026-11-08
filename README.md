@@ -4,7 +4,41 @@ A multiplayer Snake game crossed with a memory-match card game, built for intera
 
 Built as a university project (CAMI / BCC4 @ FH St. Pölten).
 
-## Quick Start
+## GitHub Pages (browser-only)
+
+The Pages build runs the game simulation in the browser. Each visitor has an
+independent session. Snake Memory supports one or more local players; Boid Battle
+needs at least two. Keyboard, gamepad, and DDJ MIDI inputs are supported. Phone QR
+joining, multiplayer across computers, and the Touch Designer/Twitch API require
+the Node server and are not part of this build.
+
+### Publish
+
+1. Push these changes to `main` on GitHub.
+2. Open **Settings → Pages → Build and deployment → Source** and select
+   **GitHub Actions**.
+3. Open **Actions → Deploy game to GitHub Pages**. If needed, click **Run workflow**.
+4. Once deployment succeeds, share **https://kornti-debug.github.io/Snakegame/**.
+
+The workflow automatically builds and deploys future pushes to `main`. It uses the
+repository's Pages base path, so assets also work if the repository is renamed.
+
+### Preview locally without a game server
+
+```bash
+npm ci
+npm run build:pages
+npm run preview:pages
+```
+
+Open **http://127.0.0.1:4173/Snakegame/**. Choose a mode with **↑ / ↓**, then
+**Enter**. In the lobby, press **A / D** to join as player 1 or **← / →** for
+player 2, then **Enter** to start. **W / ↑** activate powerups; **Esc** pauses.
+
+Run `npm test` for the game transport checks. To deploy under another path outside
+the workflow, set `PAGES_BASE_PATH` at build time (for example `/my-game/`).
+
+## Run with the Node server
 
 ```bash
 # Install dependencies

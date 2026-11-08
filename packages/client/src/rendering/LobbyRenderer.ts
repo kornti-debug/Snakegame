@@ -40,7 +40,7 @@ export class LobbyRenderer {
   private qr?: QrCache;
   private hitZones: HitZone[] = [];
 
-  constructor(canvas: HTMLCanvasElement, boids?: BackgroundBoids, qr?: QrCache) {
+  constructor(canvas: HTMLCanvasElement, boids?: BackgroundBoids, qr?: QrCache, private localGame = false) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.boids = boids ?? new BackgroundBoids();
@@ -88,11 +88,13 @@ export class LobbyRenderer {
     ctx.fillStyle = '#b8c4d4';
     const subtitle = ddjDuelMode
       ? 'Boid Battle  ·  spin a DDJ deck to join'
-      : 'Snake Memory  ·  scan QR to join, pick a board';
+      : this.localGame ? 'Snake Memory  ·  play on this computer, pick a board' : 'Snake Memory  ·  scan QR to join, pick a board';
     ctx.fillText(subtitle, ARENA_WIDTH / 2, 130);
     ctx.font = '17px monospace';
     ctx.fillStyle = '#ffcc88';
-    ctx.fillText('DDJ-400: spin LEFT deck for player 1, RIGHT deck for player 2  ·  keyboard / phones also work', ARENA_WIDTH / 2, 158);
+    ctx.fillText(this.localGame
+      ? 'Press A / D for player 1, LEFT / RIGHT for player 2  ·  gamepad and DDJ controllers also work'
+      : 'DDJ-400: spin LEFT deck for player 1, RIGHT deck for player 2  ·  keyboard / phones also work', ARENA_WIDTH / 2, 158);
 
     // Left: player list
     this.drawPlayerList(ctx, LIST_X, SECTION_TOP, LIST_W, players);
@@ -286,7 +288,7 @@ export class LobbyRenderer {
       const pulse = 0.45 + Math.sin(this.pulseTime * 3) * 0.25;
       ctx.font = '16px monospace';
       ctx.fillStyle = `rgb(${Math.round(100 + 155 * pulse)}, ${Math.round(200 + 55 * pulse)}, 255)`;
-      ctx.fillText('+  empty — scan the QR code to join', x + pad + 40, cy);
+      ctx.fillText(this.localGame ? '+  press A / D or LEFT / RIGHT to join' : '+  empty — scan the QR code to join', x + pad + 40, cy);
     } else {
       ctx.font = '14px monospace';
       ctx.fillStyle = '#6a7588';
@@ -301,6 +303,31 @@ export class LobbyRenderer {
     x: number, y: number, w: number, h: number,
   ): void {
     this.drawCardShell(ctx, x, y, w, h);
+
+    if (this.localGame) {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.font = 'bold 22px monospace';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('PLAY LOCALLY', x + w / 2, y + 42);
+      const lines = [
+        'Player 1: A / D to steer',
+        'W to activate a powerup',
+        '',
+        'Player 2: LEFT / RIGHT',
+        'UP to activate a powerup',
+        '',
+        'ENTER starts the game',
+        'ESC pauses the game',
+        '',
+        'One game per browser.',
+        'Phone joining unavailable.',
+      ];
+      ctx.font = '16px monospace';
+      ctx.fillStyle = '#b8c4d4';
+      lines.forEach((line, i) => ctx.fillText(line, x + w / 2, y + 82 + i * 27));
+      return;
+    }
 
     const pad = 18;
     const headerH = 40;

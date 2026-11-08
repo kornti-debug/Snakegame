@@ -5,7 +5,7 @@ export class InstructionsRenderer {
   private ctx: CanvasRenderingContext2D;
   private pulseTime = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, private localGame = false) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
   }
@@ -56,8 +56,8 @@ export class InstructionsRenderer {
     ]);
 
     this.drawSection(ctx, leftX, topY + 360, colW, 'CONTROLS', [
-      'Phone:    scan the lobby QR.',
-      '          Tap & hold L / R to steer.',
+      this.localGame ? 'Local:    A/D + W for player 1.' : 'Phone:    scan the lobby QR.',
+      this.localGame ? '          Arrows + UP for player 2.' : '          Tap & hold L / R to steer.',
       'DDJ-400:  spin jog to steer.',
       '          PLAY = brake + activate.',
       '          CUE  = turbo (held).',

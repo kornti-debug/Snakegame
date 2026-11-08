@@ -51,7 +51,7 @@ export class GameRoom {
   // Grace-period eviction timers, keyed by the dead socketId. Lets a
   // dropped phone reconnect within the window and reclaim its slot + snake
   // via phone:reclaim. Cleared if reclaim succeeds or the timer fires.
-  private disconnectTimers = new Map<string, NodeJS.Timeout>();
+  private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
   static readonly DISCONNECT_GRACE_MS = 10_000;
 
   paused = false;
@@ -63,8 +63,8 @@ export class GameRoom {
 
   pendingEvents: GameEvent[] = [];
 
-  constructor(uploadDir: string) {
-    this.imageManager = new ImageManager(uploadDir);
+  constructor(saveImage?: (base64: string) => string) {
+    this.imageManager = new ImageManager(saveImage);
   }
 
   // --- Lobby ---

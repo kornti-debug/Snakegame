@@ -1,4 +1,6 @@
+import './config/tuning.node.js';
 import express from 'express';
+import fs from 'node:fs';
 import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,7 +23,12 @@ const httpServer = createServer(app);
 
 // Upload directory for images
 const uploadDir = path.resolve(__dirname, '..', 'uploads');
-const room = new GameRoom(uploadDir);
+fs.mkdirSync(uploadDir, { recursive: true });
+const room = new GameRoom((base64) => {
+  const filename = `round-${Date.now()}.png`;
+  fs.writeFileSync(path.join(uploadDir, filename), Buffer.from(base64, 'base64'));
+  return `/uploads/${filename}`;
+});
 const socketManager = new SocketManager(httpServer, room, API_KEY);
 
 const gameLoop = new GameLoop((dt) => {

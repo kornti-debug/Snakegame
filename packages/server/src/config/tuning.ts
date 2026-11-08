@@ -1,7 +1,3 @@
-import { readFileSync, watch as fsWatch } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-
 import {
   TURBO_MULTIPLIER, TURBO_MAX_MS, TURBO_COOLDOWN_MS,
   BRAKE_DURATION_MS, BRAKE_COOLDOWN_MS,
@@ -16,14 +12,13 @@ import {
 } from '@snakegame/shared';
 
 /**
- * Runtime-tunable gameplay parameters, loaded from `packages/server/config/tuning.json`
- * at server boot. Fall back to the shared defaults on missing keys or a bad file
+ * Portable gameplay parameters. The host applies `config/tuning.json`
+ * at startup. Fall back to the shared defaults on missing keys or a bad file
  * so the game always has sane values.
  *
  * The loaded config is exposed as a mutable `TUNING` object — powerup definitions
  * read from it via property getters so they see the current values at activation
- * time. Reloading the JSON requires a server restart (tsx-watch does not watch
- * JSON files).
+ * time. The Node host watches the JSON for edits; the Pages build bundles it.
  */
 export interface Tuning {
   turbo: {
@@ -77,7 +72,7 @@ const DEFAULTS: Tuning = {
   },
 };
 
-function deepMerge<T>(base: T, patch: unknown): T {
+export function deepMerge<T>(base: T, patch: unknown): T {
   if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) return base;
   const out: Record<string, unknown> = { ...(base as object) };
   const p = patch as Record<string, unknown>;
@@ -93,64 +88,10 @@ function deepMerge<T>(base: T, patch: unknown): T {
   return out as T;
 }
 
-function resolveTuningPath(): string {
-  // __dirname equivalent for ESM, then walk out to packages/server/config/tuning.json.
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(here, '..', '..', 'config', 'tuning.json');
-}
+/** Shared by the Node host and the browser-only game. */
+export const TUNING: Tuning = deepMerge(DEFAULTS, {});
 
-function loadTuning(): Tuning {
-  const filePath = resolveTuningPath();
-  try {
-    const raw = readFileSync(filePath, 'utf8');
-    const parsed = JSON.parse(raw);
-    const merged = deepMerge(DEFAULTS, parsed);
-    console.log(`[Tuning] Loaded ${filePath}`);
-    return merged;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Tuning] Falling back to defaults (${msg})`);
-    return DEFAULTS;
-  }
-}
-
-/** Singleton tuning config. Mutate via `reloadTuning()` only. */
-export const TUNING: Tuning = loadTuning();
-
-/** Force a fresh read from disk. Safe to call at runtime — existing powerup
- *  definitions read values via getters so they pick up the new numbers on
- *  their next activation. */
-export function reloadTuning(): Tuning {
-  const next = loadTuning();
-  Object.assign(TUNING, next);
-  // Deep-merge nested objects so field-level getters see the new numbers.
-  for (const k of Object.keys(next) as (keyof Tuning)[]) {
-    const nextSection = next[k] as unknown;
-    const currentSection = TUNING[k] as unknown;
-    if (
-      nextSection && typeof nextSection === 'object' && !Array.isArray(nextSection)
-      && currentSection && typeof currentSection === 'object' && !Array.isArray(currentSection)
-    ) {
-      Object.assign(currentSection as object, nextSection as object);
-    }
-  }
+export function applyTuning(patch: unknown): Tuning {
+  Object.assign(TUNING, deepMerge(DEFAULTS, patch));
   return TUNING;
-}
-
-// Live reload: rewrite tuning.json and the server picks up new values on the
-// next read. Debounced because editors can fire multiple rename/write events
-// per save.
-let reloadTimer: NodeJS.Timeout | null = null;
-try {
-  fsWatch(resolveTuningPath(), { persistent: false }, (eventType) => {
-    if (eventType !== 'change' && eventType !== 'rename') return;
-    if (reloadTimer) clearTimeout(reloadTimer);
-    reloadTimer = setTimeout(() => {
-      reloadTuning();
-      console.log('[Tuning] Reloaded from disk');
-    }, 120);
-  });
-} catch (err) {
-  const msg = err instanceof Error ? err.message : String(err);
-  console.warn(`[Tuning] Live-reload watcher could not attach (${msg})`);
 }

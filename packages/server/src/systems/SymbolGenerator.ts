@@ -37,7 +37,7 @@ function buildSvg(char: string, color: string): string {
     <rect width="240" height="240" fill="#1a1a2e" rx="16"/>
     <text x="120" y="140" font-size="120" text-anchor="middle" fill="${color}" font-family="sans-serif">${char}</text>
   </svg>`;
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 export function getDefaultSymbols(): SymbolDef[] {
